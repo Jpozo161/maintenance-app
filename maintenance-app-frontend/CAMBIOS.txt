@@ -1,0 +1,160 @@
+DOCUMENTO DE CAMBIOS DEL FRONTEND
+Actualizado: 24 de septiembre de 2026
+
+Este documento resume los cambios implementados, los bloques de código involucrados, su función y los archivos que necesitan conexión con la API. Los números son las líneas actuales de cada archivo; indican los bloques agregados o modificados, no un diff literal.
+
+
+1. src/data/modules.js
+
+Líneas 1 a 8. Define las secciones de navegación y agrega OCR facturas al menú lateral.
+
+Líneas 10 a 15. Define los encabezados que muestran las tablas de propietarios, pagos, mantenimientos y novedades.
+
+Líneas 17 a 23. Centraliza las rutas REST utilizadas para consultar los datos.
+
+Líneas 25 a 30. La función asArray normaliza respuestas que lleguen como lista o dentro de las propiedades data o rows.
+
+Líneas 32 a 41. La función toTableRows transforma las respuestas de la API en filas que entienden las tablas.
+
+
+2. src/services/api.js
+
+Línea 1. Permite configurar la dirección base con VITE_API_URL. Por defecto utiliza /api para que las peticiones pasen por el proxy de Vite.
+
+Líneas 3 a 9. getResource realiza consultas GET, solicita JSON y reporta errores HTTP.
+
+Líneas 11 a 22. api envía formularios por POST para propietarios, pagos y mantenimientos.
+
+Línea 24. getApi consulta los residenciales que aparecen en el selector del formulario.
+
+
+3. src/components/Dashboard.jsx
+
+Líneas 1 a 4. Importa React, tablas, rutas y funciones de consulta.
+
+Líneas 6 a 11. Configura el formato de moneda y los estados de datos, carga y error.
+
+Líneas 13 a 20. Consulta propietarios, pagos, mantenimientos, novedades y próximos mantenimientos al abrir el inicio.
+
+Líneas 22 a 28. Calcula las tarjetas usando información recibida. El total de pagos se calcula desde valor o monto.
+
+Líneas 30 a 48. Presenta la carga, los errores, los próximos mantenimientos, los pagos recientes y las novedades. La tabla de novedades presenta cinco registros por página.
+
+La tarjeta de unidades muestra un guion porque todavía no se definió una ruta para consultar unidades.
+
+
+4. src/components/MaintenanceModule.jsx
+
+Líneas 1 a 11. Importa encabezados, transformadores y cliente API.
+
+Líneas 14 a 26. Administra filas y errores, y establece el nombre del botón de registro según el módulo.
+
+Líneas 29 a 60. Consulta los registros del módulo activo y evita actualizar la vista si esta ya se desmontó.
+
+Líneas 63 a 73. Presenta el formulario de creación.
+
+Líneas 76 a 170. Muestra los datos paginados, además de estados de carga y error.
+
+
+5. src/components/DataTable.jsx
+
+Líneas 1 a 20. Controla la página actual y selecciona qué filas mostrar. El tamaño predeterminado es de ocho filas por página.
+
+Líneas 21 a 94. Representa encabezados, registros, acciones y el mensaje de tabla vacía.
+
+Líneas 96 a 150. Agrega los controles Anterior y Siguiente, el número de página y el conteo de registros.
+
+
+6. src/App.jsx
+
+Línea 10. Importa la pantalla de comparación OCR.
+
+Líneas 66 a 68. Muestra el título de la sección actual con un título alternativo si no encuentra la ruta.
+
+Líneas 90 a 105. Agrega la ruta a la pantalla OCR y reinicia el módulo de datos al cambiar de sección.
+
+
+7. src/components/OcrComparison.jsx
+
+Líneas 1 a 5. Guarda los dos archivos seleccionados.
+
+Líneas 6 a 14. Muestra los espacios para adjuntar dos facturas y el botón Comparar facturas.
+
+La pantalla envía dos archivos a POST /ocr y compara el texto y los campos detectados por el servicio Tesseract.js/PDF.js del backend.
+
+
+8. src/components/form.jsx
+
+Líneas 145 a 159. Crea una etiqueta separada para cada campo, asociada con su input o selector mediante htmlFor e id.
+
+Líneas 169 a 193. Asocia correctamente la etiqueta Rol con su selector.
+
+Las líneas 1 a 2, 19 a 38 y 53 a 65 contienen el uso preexistente de la API para cargar residenciales y enviar formularios. Se indican aquí porque este archivo depende de la API.
+
+
+9. src/styles/app.css
+
+Líneas 118 a 122. Permite que el área principal ocupe como mínimo el alto de la ventana y se adapte al ancho disponible.
+
+Líneas 165 a 172. Hace que el inicio cubra la zona inferior disponible y que el panel de novedades use todo el ancho.
+
+Líneas 500 a 532. Separa visualmente cada nombre de campo y su control, define colores y pesos de letra, y hace los campos de ancho completo.
+
+Las reglas de .table-wrap, .data-table, .pagination y .table-empty organizan la tabla paginada y su estado vacío.
+
+Las reglas .ocr-* dan estilo al área de carga de facturas y al botón de comparación.
+
+
+ARCHIVOS QUE NECESITAN LA API
+
+src/services/api.js
+Es el cliente compartido para GET y POST. Consulta las rutas centralizadas en src/data/modules.js y también GET /residenciales. Envía POST a /register, /pagos y /maintenance.
+
+src/data/modules.js
+Define las rutas GET /propietarios, /pagos, /mantenimiento, /novedades y /nextmaintenance. También normaliza los datos recibidos.
+
+src/components/Dashboard.jsx
+Consulta mediante getResource los cinco recursos del inicio: propietarios, pagos, mantenimiento, novedades y próximos mantenimientos.
+
+src/components/MaintenanceModule.jsx
+Consulta los registros del módulo seleccionado: propietarios, pagos o mantenimiento.
+
+src/components/form.jsx
+Consulta GET /residenciales para el selector y envía registros mediante POST a /register, /pagos o /maintenance.
+
+src/components/Sidebar.jsx no hace peticiones API. Obtiene nombres e íconos de src/data/modules.js.
+
+src/components/FailureReport.jsx todavía no guarda datos en la API; actualmente solo muestra una confirmación local.
+
+src/components/OcrComparison.jsx envía los archivos a POST /ocr; la extracción se implementa en el servicio del backend.
+
+
+CONFIGURACIÓN DE API Y CORS
+
+En desarrollo, vite.config.js reenvía las solicitudes /api/* a http://localhost:3000/*. El navegador consulta el mismo origen del frontend y Vite las transmite al backend, lo que evita el bloqueo CORS en esas peticiones.
+
+El backend debe estar activo, exponer las rutas anteriores y responder JSON. Si VITE_API_URL se configura con una dirección absoluta, la llamada vuelve a ser entre orígenes y el backend debe autorizar el origen del frontend mediante CORS.
+
+Las propiedades que entrega el backend deben corresponder con los campos que transforma toTableRows en src/data/modules.js.
+
+
+VERIFICACIÓN
+
+npm run lint y npm run build: correctos. Se verificó GET /pagos con identificadores y POST /ocr con una imagen de factura; se extrajeron emisor, número, fecha y total.
+
+10. Formato de fechas
+
+Se centralizó formatDate en src/data/modules.js para mostrar fechas como DD/MM/YYYY en la zona America/Bogota. Se aplica a pagos, mantenimientos, averías, próximos mantenimientos y pagos recientes del Dashboard. Los valores vacíos o no válidos se muestran como guion.
+
+11. Menús, filtros y OCR funcional
+
+DataTable centraliza búsqueda, filtro y paginación. Usuarios, Propiedades y Pagos tienen menú de tres puntos por fila con Editar y Eliminar; los usuarios cargan su rol desde la tabla roles y editan el rol con opciones obtenidas de GET /roles. Se quitó Estado de las tablas Usuarios y Propiedades. Los pagos y usuarios tienen rutas PUT/DELETE por ID. El OCR está en el servicio del backend src/services/invoiceOcr.js con Tesseract.js/PDF.js; procesa PDF, JPG y PNG en español e inglés, con límites de 25 páginas por PDF y 20 MB por archivo.
+
+
+12. Reservas de áreas sociales
+
+src/components/SocialAreasModule.jsx coordina las pestañas y solicitudes. useSocialAreas.js mantiene el estado y la comunicación con la API; ResidentAreaBooking.jsx presenta la reserva del residente; SocialAreasManagement.jsx presenta el formulario y tabla de administración; socialAreasUtils.js comparte formatos y columnas. ADMIN puede previsualizar el calendario en “Vista de reservas”; el formulario y la tabla quedan en “Administrar áreas”. Las reservas desde la previsualización están deshabilitadas para ADMIN. Las fotos se sirven desde public/social-areas y no se guardan en la base de datos.
+
+src/styles/app.css agrega el diseño responsive de la vista de reservas, la tira horizontal de fechas, la cuadrícula de horarios y la barra de confirmación.
+
+public/social-areas/piscina.jpg contiene la foto de piscina tomada de la referencia visual enviada. Es el único archivo de foto de área recibido hasta ahora; para mostrar fotos reales distintas en cada área deben agregarse sus archivos estáticos y asignarlos en el frontend.
