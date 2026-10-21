@@ -6,6 +6,8 @@ import {
   deleteUsuario,
   getResidenciales,
   getRoles,
+  getFacturas,
+  getOriginalFacturaUrl,
   updatePago,
   updateUsuario,
 } from "../services/api";
@@ -21,6 +23,7 @@ export default function MaintenanceModule({ type, onToast, objects }) {
   const [roles, setRoles] = useState([]);
   const [residenciales, setResidenciales] = useState([]);
   const [savingUser, setSavingUser] = useState(false);
+  const [maintenanceInvoices, setMaintenanceInvoices] = useState(null);
   const loading = rows === null;
   const singular = { propietarios: "usuario", pagos: "pago", mantenimientos: "mantenimiento" }[type] ?? "registro";
 
@@ -124,6 +127,14 @@ export default function MaintenanceModule({ type, onToast, objects }) {
     <button type="button" role="menuitem" className="danger" onClick={() => { close(); deleteUser(row); }}>Eliminar</button>
   </>;
 
+  const maintenanceActions = (row, close) => <button type="button" role="menuitem" onClick={async () => {
+    close(); setError("");
+    try {
+      const invoices = await getFacturas(row.id);
+      setMaintenanceInvoices({ id: row.id, tipo: row.item.tipo ?? row.item.descripcion, invoices: Array.isArray(invoices) ? invoices : [] });
+    } catch (err) { setError(`No se pudieron cargar las facturas del mantenimiento: ${err.message}`); }
+  }}>Ver facturas asociadas</button>;
+
   if (objects === "open") return <Form type={type} showToast={onToast} objects={objects} />;
 
   return <section className="content">
@@ -147,10 +158,15 @@ export default function MaintenanceModule({ type, onToast, objects }) {
       <div className="form-actions"><button type="button" onClick={() => setEditingUser(null)} disabled={savingUser}>Cancelar</button><button type="submit" disabled={savingUser}>{savingUser ? "Guardando…" : "Guardar cambios"}</button></div>
     </form>}
 
+    {maintenanceInvoices && <section className="panel maintenance-invoices-panel">
+      <div className="panel-title"><div><h3>Facturas del mantenimiento #{maintenanceInvoices.id}</h3><p>{maintenanceInvoices.tipo || "Documentos asociados manualmente"}</p></div><button type="button" onClick={() => setMaintenanceInvoices(null)}>Cerrar</button></div>
+      {maintenanceInvoices.invoices.length ? <ul className="maintenance-invoice-list">{maintenanceInvoices.invoices.map((invoice) => <li key={invoice.id}><div><strong>{invoice.nombre_original}</strong><span>{invoice.proveedor || "Proveedor sin detectar"} · {invoice.numero_factura || "Sin número"}</span></div><a href={getOriginalFacturaUrl(invoice.id)} target="_blank" rel="noreferrer">Abrir factura</a></li>)}</ul> : <p>Este mantenimiento todavía no tiene facturas asociadas.</p>}
+    </section>}
+
     <section className="panel">
       {error && <p className="load-error" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      {loading ? <p className="table-loading">Cargando información…</p> : <DataTable columns={headers[type] ?? []} rows={rows} renderActions={type === "pagos" ? paymentActions : type === "propietarios" ? userActions : undefined} />}
+      {loading ? <p className="table-loading">Cargando información…</p> : <DataTable columns={headers[type] ?? []} rows={rows} renderActions={type === "pagos" ? paymentActions : type === "propietarios" ? userActions : type === "mantenimientos" ? maintenanceActions : undefined} />}
     </section>
   </section>;
 }

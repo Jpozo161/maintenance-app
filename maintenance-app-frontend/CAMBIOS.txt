@@ -158,3 +158,7 @@ src/components/SocialAreasModule.jsx coordina las pestañas y solicitudes. useSo
 src/styles/app.css agrega el diseño responsive de la vista de reservas, la tira horizontal de fechas, la cuadrícula de horarios y la barra de confirmación.
 
 public/social-areas/piscina.jpg contiene la foto de piscina tomada de la referencia visual enviada. Es el único archivo de foto de área recibido hasta ahora; para mostrar fotos reales distintas en cada área deben agregarse sus archivos estáticos y asignarlos en el frontend.
+
+13. Acceso de residentes
+
+src/components/LoginPage.jsx incluye a residentes en la descripción de roles admitidos; el formulario ya autentica por correo y contraseña y dirige al rol RESIDENTE a Áreas sociales.

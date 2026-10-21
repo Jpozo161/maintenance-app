@@ -85,18 +85,44 @@ export default function App() {
   return <div className="app-shell">
     <Sidebar view={currentView} onNavigate={navigate} user={user} onSignOut={signOut} />
     <main>
+      
       <header className="topbar">
-        <div><small>ADMINISTRACIÓN DEL CONJUNTO</small><h1>{navigation[currentView]?.title ?? "Inicio"}</h1></div>
-        {user.role === "ADMIN" && <button className="bell" aria-label="Notificaciones">♧</button>}
+        <div>
+          <small>ADMINISTRACIÓN DEL CONJUNTO</small>
+          <h1>{navigation[currentView]?.title ?? "Inicio"}</h1>
+        </div>
+
+        {user.role === "ADMIN" && 
+          <button className="bell" aria-label="Notificaciones">
+          ♧
+          </button>}
       </header>
-      {currentView === "inicio" ? <Dashboard onNavigate={navigate} />
-        : currentView === "areasSociales" ? <SocialAreasModule user={user} />
-          : currentView === "ocr" ? <OcrComparison />
-          : currentView === "averias" ? (user.role === "SUPERVISOR" ? <AveriasModule /> : <FailureReport onToast={showToast} />)
-            : currentView === "propiedades" ? <PropertiesModule />
-              : user.role === "ADMIN" ? <MaintenanceModule key={currentView} type={currentView} onToast={showToast} objects={objects} />
+
+      {currentView === "inicio" ? 
+        <Dashboard onNavigate={navigate} />
+        : currentView === "areasSociales" ? 
+          <SocialAreasModule user={user} />
+          : currentView === "ocr" ? 
+            <OcrComparison />
+          : currentView === "averias" ? 
+            (user.role === "SUPERVISOR" ? 
+              <AveriasModule /> : <FailureReport onToast={showToast} />
+            )
+            : currentView === "propiedades" ? 
+              <PropertiesModule />
+              : user.role === "ADMIN" ? 
+                <MaintenanceModule 
+                key={currentView} t
+                ype={currentView} 
+                onToast={showToast} 
+                objects={objects} />
                 : <AveriasModule />}
     </main>
-    {toast && <div className="toast">{toast}</div>}
-  </div>;
-}
+
+    {toast && 
+      <div className="toast">
+        {toast}
+      </div>
+    }
+  </div>
+  ;}

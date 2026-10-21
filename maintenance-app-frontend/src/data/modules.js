@@ -6,13 +6,13 @@ export const navigation = {
   averias: { title: "Averías", icon: "⚠" },
   propiedades: {title: "Propiedades", icon: "◉" },
   areasSociales: { title: "Áreas sociales", icon: "⌂" },
-  ocr: { title: "OCR facturas", icon: "▤" }
+  ocr: { title: "Facturas", icon: "▤" }
 };
 
 export const headers = {
   propietarios: ["Usuario", "Residencial", "Correo", "Tipo de rol"],
   pagos: ["Fecha", "Propietario", "Valor", "Estado"],
-  mantenimientos: ["Actividad", "Descripción", "Fecha", "Estado"],
+  mantenimientos: ["Actividad", "Descripción", "Fecha", "Estado", "Facturas"],
   novedades: ["Novedad", "Categoría", "Residencial", "Fecha"],
 };
 
@@ -84,12 +84,17 @@ export const toTableRows = (type, data) =>
       ]
     };
 
-    case "mantenimientos": return [
-      item.tipo ?? item.actividad, 
-      item.descripcion, 
-      formatDate(item.fecha_programada ?? item.fecha), 
-      item.estado_id ?? item.estado
-    ];
+    case "mantenimientos": return {
+      id: item.id,
+      item,
+      cells: [
+        item.tipo ?? item.actividad,
+        item.descripcion,
+        formatDate(item.fecha_programada ?? item.fecha),
+        item.estado_id ?? item.estado,
+        Number(item.facturas_count) ? `${item.facturas_count} ${Number(item.facturas_count) === 1 ? "factura" : "facturas"}` : "Sin facturas"
+      ]
+    };
 
     case "averias": return [
       item.descripcion,

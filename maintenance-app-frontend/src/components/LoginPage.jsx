@@ -26,7 +26,7 @@ export default function LoginPage({ onLogin }) {
       <div className="login-brand-mark">▣</div>
       <p className="login-eyebrow">CONJUNTO RESIDENCIAL</p>
       <h1>Iniciar sesión</h1>
-      <p className="login-description">Ingresa con tu cuenta de administrador o supervisor.</p>
+      <p className="login-description">Ingresa con tu cuenta de administrador, supervisor o residente.</p>
       <form onSubmit={submit}>
         <label htmlFor="login-email">Correo electrónico</label>
         <input id="login-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required autoFocus />

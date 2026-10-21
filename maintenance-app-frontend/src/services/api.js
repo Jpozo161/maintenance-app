@@ -127,23 +127,39 @@ export const reviewAreaReservation = (id, estado) =>
   requestResource("/reservas/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ estado }) });
 
 
-// POST genérico para otros recursos
-export const extractInvoice = (file) => {
+export const previewInvoice = (file) => {
   if (!file) 
-    return Promise.reject(new Error("Selecciona un archivo."));
-
+    return Promise.reject(new Error("Selecciona un archivo."
+  ));
   if (file.size > 20 * 1024 * 1024) 
-    return Promise.reject(new Error("El archivo supera el límite de 20 MB."));
-
+    return Promise.reject(new Error("El archivo supera el límite de 20 MB."
+  ));
   return requestResource("/ocr", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/octet-stream",
-      "X-File-Name": encodeURIComponent(file.name)
-    },
+    headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "application/octet-stream" },
     body: file
   }, 90000);
 };
+
+export const getFacturas = (mantenimientoId) => {
+  const query = mantenimientoId == null ? "" : `?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`;
+  return requestResource(`/facturas${query}`);
+};
+
+export const getMantenimientos = () => requestResource("/mantenimiento");
+
+export const uploadFactura = (file) => requestResource("/facturas", {
+  method: "POST",
+  headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "application/octet-stream" },
+  body: file
+}, 120000);
+
+export const associateFactura = (id, mantenimientoId) => requestResource(`/facturas/${encodeURIComponent(id)}/mantenimiento`, {
+  method: "PATCH",
+  body: JSON.stringify({ mantenimiento_id: mantenimientoId })
+});
+
+export const getOriginalFacturaUrl = (id) => `${API_BASE_URL}/facturas/${encodeURIComponent(id)}/original`;
 
 
 export const loginUser = (credentials) =>
