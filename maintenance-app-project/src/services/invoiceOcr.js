@@ -29,24 +29,42 @@ function parseAmount(raw) {
 }
 
 function parseFields(text) {
-    const date = text.match(
-        /(?:fecha(?:\s+de\s+(?:emisi[oó]n|factura))?)\s*[:#-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})/i);
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const match = (pattern) => text.match(pattern)?.[1]?.trim() ?? null;
+    const amountFor = (pattern) => parseAmount(match(pattern));
+    const datePattern = "(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|\\d{4}-\\d{2}-\\d{2})";
+    const labeled = (label) => new RegExp(`(?:${label})\\s*[:#-]?\\s*([^\\n\\r]+)`, "i");
+    const invoiceNumber = match(/(?:n[uú]mero\s*(?:de\s*)?(?:factura|invoice)|(?:factura|invoice)\s*(?:n(?:[uú]mero|[oº°.]*)?)?)\s*[:#-]?\s*([A-Z0-9-]{3,})/i);
+    const date = match(new RegExp(`(?:fecha(?:\\s+de\\s+(?:emisi[oó]n|factura))?|invoice date)\\s*[:#-]?\\s*${datePattern}`, "i"));
+    const dueDate = match(new RegExp(`(?:fecha de vencimiento|vencimiento|due date)\\s*[:#-]?\\s*${datePattern}`, "i"));
+    const total = amountFor(/(?:total(?:\s+(?:a pagar|general))?|monto total|valor total|importe total)\s*[:-]?\s*(?:(?:cop|usd|eur)\s*)?\$?\s*([\d][\d., ]*)/i);
+    const subtotal = amountFor(/(?:subtotal|sub-total)\s*[:-]?\s*\$?\s*([\d][\d., ]*)/i);
+    const tax = amountFor(/(?:impuestos?|\biva\b|tax)\s*[:-]?\s*\$?\s*([\d][\d., ]*)/i);
+    const currency = match(/\b(COP|USD|EUR|MXN|DOP|CRC|PEN|CLP|ARS)\b/i)
+        ?? (text.includes("€") ? "EUR" : text.includes("$") ? "COP" : null);
+    const paymentTerms = match(labeled("condiciones? de pago|t[eé]rminos? de pago|payment terms"));
+    const supplier = match(labeled("proveedor|supplier|vendedor"))
+        ?? lines.find((line) => !/(factura|invoice|nit|fecha|total|subtotal)/i.test(line))
+        ?? null;
 
-    const invoiceNumber = text.match(
-        /(?:factura|invoice)\s*(?:n(?:[úu]mero|[oº°.]*)?)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i);
+    // Recognize common one-line item rows ending in a line total. Avoid promoting
+    // summary rows (subtotal/tax/total) into products.
+    const items = lines.flatMap((line) => {
+        if (/\b(subtotal|impuesto|iva|total|descuento)\b/i.test(line)) return [];
+        const amounts = [...line.matchAll(/(?:\$\s*)?(\d[\d.,]*)(?=\s|$)/g)]
+            .map((entry) => ({ raw: entry[1], index: entry.index }))
+            .filter((entry) => parseAmount(entry.raw) != null);
+        if (!amounts.length) return [];
+        const last = amounts[amounts.length - 1];
+        const description = line.slice(0, last.index).replace(/[|•-]+\s*$/, "").trim();
+        if (description.length < 3 || /^(cantidad|cant\.?|qty|precio|amount|valor)$/i.test(description)) return [];
+        const quantity = amounts.length > 1 && /^\d+(?:[.,]\d+)?$/.test(amounts[0].raw)
+            ? parseAmount(amounts[0].raw) : null;
+        const unitPrice = amounts.length > 1 ? parseAmount(amounts[amounts.length - 2].raw) : null;
+        return [{ product: description, description, quantity, unitPrice, total: parseAmount(last.raw) }];
+    });
 
-    const total = text.match(
-        /(?:total(?:\s+(?:a pagar|general))?|monto total|valor total|importe total)\s*[:-]?\s*(?:cop\s*)?\$?\s*([\d][\d., ]*)/i);
-
-    const supplier = text.split(/\r?\n/).map((line) => 
-        line.trim()).find(Boolean) ?? null;
-
-    return { 
-        supplier, 
-        invoiceNumber: invoiceNumber?.[1] ?? null, 
-        date: date?.[1] ?? null, 
-        total: parseAmount(total?.[1]) 
-    };
+    return { supplier, invoiceNumber, date, dueDate, paymentTerms, currency, subtotal, tax, total, items };
 }
 
 async function createOcrWorker() {

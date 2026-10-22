@@ -1,4 +1,5 @@
 import DataTable from "./DataTable";
+import { SOCIAL_AREA_NAMES } from "./socialAreasUtils";
 
 export default function SocialAreasManagement({
   editingId, areaForm, setAreaForm, residenciales, saving, onSubmit, onCancel,
@@ -12,7 +13,11 @@ export default function SocialAreasManagement({
           <option value="">Selecciona un residencial</option>
           {residenciales.map((residential) => <option key={residential.id} value={residential.id}>{residential.nombre}</option>)}
         </select></label>
-        <label><span>Nombre del área</span><input required maxLength={150} placeholder="Piscina, salón social…" value={areaForm.nombre} onChange={(event) => setAreaForm({ ...areaForm, nombre: event.target.value })} /></label>
+        <label><span>Nombre del área</span><select required value={areaForm.nombre} onChange={(event) => setAreaForm({ ...areaForm, nombre: event.target.value })}>
+          <option value="">Selecciona un área</option>
+          {!SOCIAL_AREA_NAMES.includes(areaForm.nombre) && areaForm.nombre && <option value={areaForm.nombre}>{areaForm.nombre}</option>}
+          {SOCIAL_AREA_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select></label>
         <label className="social-description-field"><span>Descripción</span><input placeholder="Descripción breve" value={areaForm.descripcion} onChange={(event) => setAreaForm({ ...areaForm, descripcion: event.target.value })} /></label>
         <label><span>Apertura</span><input type="time" required value={areaForm.hora_apertura} onChange={(event) => setAreaForm({ ...areaForm, hora_apertura: event.target.value })} /></label>
         <label><span>Cierre</span><input type="time" required value={areaForm.hora_cierre} onChange={(event) => setAreaForm({ ...areaForm, hora_cierre: event.target.value })} /></label>

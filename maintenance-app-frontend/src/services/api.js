@@ -142,7 +142,9 @@ export const previewInvoice = (file) => {
 };
 
 export const getFacturas = (mantenimientoId) => {
-  const query = mantenimientoId == null ? "" : `?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`;
+  const query = mantenimientoId == null 
+    ? "" 
+    : `?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`;
   return requestResource(`/facturas${query}`);
 };
 

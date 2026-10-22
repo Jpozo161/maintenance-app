@@ -25,7 +25,9 @@ export default function App() {
       ? "averias"
       : sessionUser.role === "RESIDENTE"
         ? "areasSociales"
-        : navigation[window.location.hash.slice(1)] ? window.location.hash.slice(1) : "inicio";
+        : sessionUser.role === "TECNICO"
+          ? ["inicio", "mantenimientos"].includes(window.location.hash.slice(1)) ? window.location.hash.slice(1) : "inicio"
+          : navigation[window.location.hash.slice(1)] ? window.location.hash.slice(1) : "inicio";
     window.location.hash = nextView;
     setView(nextView);
   }, []);
@@ -46,6 +48,7 @@ export default function App() {
   const navigate = (nextView) => {
     if (user?.role === "SUPERVISOR" && nextView !== "averias") return;
     if (user?.role === "RESIDENTE" && nextView !== "areasSociales") return;
+    if (user?.role === "TECNICO" && !["inicio", "mantenimientos"].includes(nextView)) return;
     if (!navigation[nextView]) return;
     window.location.hash = nextView;
     setView(nextView);
@@ -80,7 +83,7 @@ export default function App() {
   if (checkingSession) return <main className="auth-loading">Comprobando sesión…</main>;
   if (!user) return <LoginPage onLogin={signIn} />;
 
-  const currentView = user.role === "SUPERVISOR" ? "averias" : user.role === "RESIDENTE" ? "areasSociales" : view;
+  const currentView = user.role === "SUPERVISOR" ? "averias" : user.role === "RESIDENTE" ? "areasSociales" : user.role === "TECNICO" && !["inicio", "mantenimientos"].includes(view) ? "inicio" : view;
 
   return <div className="app-shell">
     <Sidebar view={currentView} onNavigate={navigate} user={user} onSignOut={signOut} />
@@ -93,13 +96,13 @@ export default function App() {
         </div>
 
         {user.role === "ADMIN" && 
-          <button className="bell" aria-label="Notificaciones">
+          <button className="bell" type="button" aria-label="Ver próximos mantenimientos" title="Ver próximos mantenimientos" onClick={() => navigate("inicio")}>
           ♧
           </button>}
       </header>
 
       {currentView === "inicio" ? 
-        <Dashboard onNavigate={navigate} />
+        <Dashboard onNavigate={navigate} role={user.role} />
         : currentView === "areasSociales" ? 
           <SocialAreasModule user={user} />
           : currentView === "ocr" ? 
@@ -110,12 +113,11 @@ export default function App() {
             )
             : currentView === "propiedades" ? 
               <PropertiesModule />
-              : user.role === "ADMIN" ? 
+              : ["ADMIN", "TECNICO"].includes(user.role) ? 
                 <MaintenanceModule 
-                key={currentView} t
-                ype={currentView} 
+                key={currentView} type={currentView}
                 onToast={showToast} 
-                objects={objects} />
+                objects={objects} readOnly={user.role === "TECNICO"} />
                 : <AveriasModule />}
     </main>
 

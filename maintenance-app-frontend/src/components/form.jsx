@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, getResidenciales, getRoles } from "../services/api";
 
-const socket = new WebSocket("ws://localhost:8080");
-
-socket.onopen = () => {
-  console.log("WebSocket conectado");
-};
-
 export default function Form({ showToast, type }) {
 
   const [form, setForm] = useState({});
@@ -14,6 +8,9 @@ export default function Form({ showToast, type }) {
   const [roles, setRoles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const selectedRole = roles.find((role) => String(role.id) === String(form.role));
+  const isResidentRole = type === "propietarios"
+    && String(selectedRole?.nombre ?? "").trim().toUpperCase() === "RESIDENTE";
 
 
   //___________________________UseEffect
@@ -56,7 +53,10 @@ export default function Form({ showToast, type }) {
     setSaving(true);
     setError("");
     try {
-      await api(form, type);
+      const payload = type === "propietarios"
+        ? { ...form, residencial_id: isResidentRole ? form.residencial_id || null : null }
+        : form;
+      await api(payload, type);
       showToast(type === "propietarios" ? "Usuario registrado correctamente" : "Registro guardado correctamente");
     } catch (err) {
       setError(err.message || "No se pudo guardar el registro.");
@@ -83,9 +83,9 @@ export default function Form({ showToast, type }) {
       Title: "Registrar Pagos",
       Subtitle: "Reportar Pagos",
       Fields: [
-        { name: "Propietario", label: "Propietario" },
-        { name: "Monto", label: "Monto" },
-        { name: "Fecha", label: "Fecha" },
+        { name: "nombre", label: "Propietario" },
+        { name: "monto", label: "Monto", type: "number" },
+        { name: "fecha_creacion", label: "Fecha", type: "date" },
 
       ]
     },
@@ -97,17 +97,18 @@ export default function Form({ showToast, type }) {
         { name: "nombre", label: "Nombre" },
         { name: "email", label: "Email" },
         { name: "contrasena", label: "Password" },
-        { name: "residencial", label: "unidadad" }
+        { name: "residencial", label: "Unidad" }
       ]
     },
 
     mantenimientos: {
-      Title: "Reportar Mantenimiento",
-      Subtitle: "Avisar de Mantenimiento",
+      Title: "Registrar mantenimiento",
+      Subtitle: "Programar actividad",
       Fields: [
-        { name: "residencial", label: "Residencial" },
-        { name: "role", label: "Role" },
-        { name: "nombre", label: "Nombre" }
+        { name: "tipo", label: "Actividad" },
+        { name: "descripcion", label: "Descripción" },
+        { name: "residencial", label: "Propiedad / Residencial" },
+        { name: "fecha_programada", label: "Fecha límite" }
       ]
     }
   }[type];
@@ -146,14 +147,16 @@ export default function Form({ showToast, type }) {
 
           {error && <p className="load-error" role="alert">{error}</p>}
           <div className="dynamic-fields">
-            {nameConfig.Fields.map((field) => (
+            {nameConfig.Fields
+              .filter((field) => field.name !== "residencial" || type !== "propietarios" || isResidentRole)
+              .map((field) => (
               <label key={field.name} htmlFor={`field-${field.name}`}>
 
                 <span>{field.label}</span>
                 {field.name === "residencial" ? (
                   <select id={`field-${field.name}`} 
                     name="residencial_id"
-                    required={type === "propietarios" && roles.some((role) => String(role.id) === String(form.role) && role.nombre.toUpperCase() === "RESIDENTE")}
+                    required={type === "mantenimientos" || (type === "propietarios" && isResidentRole)}
                     onChange={change} 
                     value={form.residencial_id || ""}>
 
@@ -167,7 +170,9 @@ export default function Form({ showToast, type }) {
                 ) : (
 
                   <input id={`field-${field.name}`} 
-                    required name={field.name} type={field.name === "contrasena" ? "password" : "text"} 
+                    required name={field.name} type={field.type || (field.name === "contrasena" ? "password" : field.name === "fecha_programada" ? "date" : "text")} 
+                    min={field.name === "monto" ? "0" : undefined}
+                    step={field.name === "monto" ? "1" : undefined}
                     onChange={change} 
                     value={form[field.name] || ""} 
                     placeholder="Ej.: Fuga de agua en baño" />

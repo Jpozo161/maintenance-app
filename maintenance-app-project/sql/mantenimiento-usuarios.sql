@@ -1,0 +1,3 @@
+-- No ejecutar: la base actual ya dispone de mantenimientos.created_at y
+-- usuarios.estado. El backend usa esas columnas para mostrar la fecha de alta
+-- y desactivar cuentas sin borrar pagos ni modificar sus claves foráneas.

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 const cellsOf = (row) => Array.isArray(row) ? row : row?.cells ?? [];
 
-export default function DataTable({ columns = [], rows = [], pageSize = 8, renderActions }) {
+export default function DataTable({ columns = [], rows = [], pageSize = 8, renderActions, renderCell }) {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -107,13 +107,19 @@ export default function DataTable({ columns = [], rows = [], pageSize = 8, rende
               const closeActions = () => setOpenActions(null);
               
               return <tr key={key}>
-                {columns.map((_, col) => 
-                <td key={col}>
-                  {col === columns.length - 1 ? 
-                  <span className="badge">
-                    {cells[col] ?? "—"}
-                  </span> : cells[col] ?? "—"}</td>
-                )}
+                {columns.map((_, col) => {
+                  const customCell = renderCell?.(row, col, cells[col]);
+                  const cellValue = cells[col];
+                  const isEmail = typeof cellValue === "string"
+                    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cellValue.trim());
+                  const defaultCell = col === columns.length - 1
+                    ? <span className="badge">{cellValue ?? "—"}</span>
+                    : cellValue ?? "—";
+                  const cellClassName = [col === 0 && "primary-cell", isEmail && "email-cell"]
+                    .filter(Boolean)
+                    .join(" ") || undefined;
+                  return <td key={col} className={cellClassName}>{customCell ?? defaultCell}</td>;
+                })}
 
                 {renderActions && 
                 <td className="row-actions-cell">

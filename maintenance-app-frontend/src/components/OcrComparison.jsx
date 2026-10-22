@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { associateFactura, getFacturas, getMantenimientos, getOriginalFacturaUrl, previewInvoice, uploadFactura } from "../services/api";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const formatBytes = (size) => size < 1024 * 1024 ? `${(size / 1024).toFixed(0)} KB` : `${(size / (1024 * 1024)).toFixed(2)} MB`;
 const display = (value) => value == null || value === "" ? "No detectado" : value;
-const money = (value) => value == null ? "No detectado" : new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(value);
+const money = (value, currency = "COP") => value == null ? "No detectado" : new Intl.NumberFormat("es-CO", { style: "currency", currency: /^[A-Z]{3}$/.test(currency) ? currency : "COP" }).format(value);
 
 export default function OcrComparison() {
   const [file, setFile] = useState(null);
@@ -32,7 +31,8 @@ export default function OcrComparison() {
       getMantenimientos()
       ])
       .then(([saved, maintenanceRows]) => {
-        if (!active) return;
+        if (!active) 
+          return;
         setInvoices(Array.isArray(saved) ? saved : []);
         setMaintenances(Array.isArray(maintenanceRows) ? maintenanceRows : []);
       })
@@ -184,14 +184,6 @@ export default function OcrComparison() {
       </label>
       {file && 
         <div className="invoice-file-summary">
-          <span>
-            {file.type || "Tipo no identificado"}
-          </span>
-
-          <span>
-            {formatBytes(file.size)}
-          </span>
-
           <button 
             type="button" 
             onClick={() => { 
@@ -229,11 +221,11 @@ export default function OcrComparison() {
             </span>
 
             <h3>
-              Esto se guardará
+              Datos extraídos de la factura
             </h3>
 
             <p>
-              Verifica el archivo y los datos detectados antes de confirmar.
+              Revisa los datos comerciales detectados antes de confirmar el guardado.
             </p>
           </div>
 
@@ -243,57 +235,6 @@ export default function OcrComparison() {
         </div>
 
         <div className="invoice-preview-grid">
-          <div>
-            <span>
-              Nombre original
-            </span>
-
-            <strong>
-              {file.name}
-            </strong>
-          </div>
-
-          <div>
-            <span>
-              Tipo MIME
-            </span>
-
-            <strong>
-              {file.type || "No identificado"}
-            </strong>
-          </div>
-
-          <div>
-            <span>
-              Tamaño
-            </span>
-
-            <strong>
-              {formatBytes(file.size)}
-            </strong>
-          </div>
-
-          <div>
-            <span>
-              Clave prevista en S3
-            </span>
-
-            <strong className="invoice-mono">
-              {preview.objectKey}
-            </strong>
-
-          </div>
-
-          <div>
-            <span>
-              SHA-256 para duplicados
-            </span>
-
-            <strong className="invoice-mono">
-              {preview.sha256}
-            </strong>
-          </div>
-
           <div>
             <span>
               Proveedor detectado
@@ -325,11 +266,34 @@ export default function OcrComparison() {
 
           <div>
             <span>
-              Total detectado
-              </span>
-              <strong>
-                {money(preview.fields?.total)}
-              </strong>
+              Fecha de vencimiento
+            </span>
+            <strong>{display(preview.fields?.dueDate)}</strong>
+          </div>
+
+          <div>
+            <span>Condiciones de pago</span>
+            <strong>{display(preview.fields?.paymentTerms)}</strong>
+          </div>
+
+          <div>
+            <span>Moneda</span>
+            <strong>{display(preview.fields?.currency)}</strong>
+          </div>
+
+          <div>
+            <span>Subtotal</span>
+            <strong>{money(preview.fields?.subtotal, preview.fields?.currency)}</strong>
+          </div>
+
+          <div>
+            <span>Impuestos</span>
+            <strong>{money(preview.fields?.tax, preview.fields?.currency)}</strong>
+          </div>
+
+          <div>
+            <span>Total de factura</span>
+            <strong>{money(preview.fields?.total, preview.fields?.currency)}</strong>
           </div>
 
           <div>
@@ -342,6 +306,21 @@ export default function OcrComparison() {
           </div>
 
         </div>
+
+        <section className="invoice-items-preview" aria-label="Productos detectados">
+          <h4>Productos y conceptos</h4>
+          {preview.fields?.items?.length ? <div className="invoice-items-scroll">
+            <table>
+              <thead><tr><th>Producto / descripción</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th></tr></thead>
+              <tbody>{preview.fields.items.map((item, index) => <tr key={`${item.description}-${index}`}>
+                <td>{item.product || item.description || "No detectado"}{item.product && item.description && item.product !== item.description ? <small>{item.description}</small> : null}</td>
+                <td>{display(item.quantity)}</td>
+                <td>{money(item.unitPrice, preview.fields?.currency)}</td>
+                <td>{money(item.total, preview.fields?.currency)}</td>
+              </tr>)}</tbody>
+            </table>
+          </div> : <p className="invoice-items-empty">No se detectaron productos con suficiente confianza. Puedes consultar el texto reconocido abajo.</p>}
+        </section>
 
         <details className="invoice-ocr-text">
           <summary>
@@ -358,7 +337,7 @@ export default function OcrComparison() {
             ⓘ
           </span>
           <p>
-            Al confirmar, el original se subirá al bucket privado de S3 y los datos se guardarán en la base de datos. No se asignará ningún mantenimiento automáticamente.
+            Al confirmar, el documento original y los datos revisados se guardarán. La asociación a un mantenimiento seguirá siendo manual y opcional.
           </p>
         </div>
 

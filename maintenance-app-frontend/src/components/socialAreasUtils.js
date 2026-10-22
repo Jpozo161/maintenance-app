@@ -2,10 +2,12 @@ export const todayInBogota = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Bogota",
 }).format(new Date());
 
+export const SOCIAL_AREA_NAMES = ["Salón Social", "Piscina", "Área de juegos", "Cancha Padel"];
+
 export const timeValue = (value) => String(value || "").slice(0, 5);
 
 export const areaPhoto = (area) => /piscina|alberca/i.test(`${area?.nombre || ""} ${area?.descripcion || ""}`)
-  ? "/social-areas/piscina.jpg"
+  ? "/social-areas/piscina.avif"
   : null;
 
 export const emptyArea = () => ({

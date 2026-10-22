@@ -1,37 +1,13 @@
 const db = require('../../db.js');
 
-const getUser = (callback) => {
-
-    const sql = "SELECT * FROM user"
-
-    db.query(
-        sql,
-        callback
-    )
-}
-
-
 const getAverias = (callback) => {
-
-    const sql = "SELECT a.descripcion, a.categoria, r.nombre AS nombre_residencial, a.fecha FROM averias AS a INNER JOIN residenciales AS r ON r.id = a.residencial_id"
-
-    db.query(
-        sql,
-        callback
-    )
-}
-
-
-const postClient = (edificio, direccion, callback) => {
-
-    const sql = " INSERT INTO maintenance (edificio, direccion) VALUES(?,?)"
-
-    db.query(
-        sql,
-        [edificio, direccion],
-        callback
-    )
-
+    const sql = `SELECT a.id, a.residencial_id, a.descripcion, a.categoria, a.fecha, a.estado,
+        r.nombre AS nombre_residencial
+        FROM averias AS a
+        LEFT JOIN residenciales AS r ON r.id = a.residencial_id
+        WHERE a.eliminada_en IS NULL
+        ORDER BY a.fecha DESC, a.id DESC`;
+    db.query(sql, callback);
 }
 
 
@@ -40,7 +16,7 @@ const logIn = (email, callback) => {
         SELECT u.id, u.nombre, u.email, u.password, u.role_id, u.residencial_id, roles.nombre AS role_name
         FROM usuarios AS u
         LEFT JOIN roles ON roles.id = u.role_id
-        WHERE u.email = ?`;
+        WHERE u.email = ? AND COALESCE(u.estado, 1) = 1`;
         
     db.query(sql, 
         [email], 
@@ -58,38 +34,198 @@ const register = (nombre, email, password, role_id, residencial_id, callback) =>
     )
 }
 
-const maintenance = (callback) => {
-    const sql = "select tipo, descripcion, fecha_programada, estado_id from mantenimientos"
+const maintenance = (technicianId, callback) => {
+    const sql = `SELECT m.id, m.tipo, m.descripcion, m.residencial_id, r.nombre AS nombre_residencial,
+        m.created_at AS fecha_creacion, m.fecha_programada, m.estado_id, e.nombre AS estado_nombre,
+        m.tecnico_id, tecnico.nombre AS tecnico_nombre,
+        COUNT(f.id) AS facturas_count
+        FROM mantenimientos AS m
+        LEFT JOIN residenciales AS r ON r.id = m.residencial_id
+        INNER JOIN estados_mantenimiento AS e ON e.id = m.estado_id
+        LEFT JOIN usuarios AS tecnico ON tecnico.id = m.tecnico_id
+        LEFT JOIN facturas AS f ON f.mantenimiento_id = m.id
+        WHERE m.eliminado_en IS NULL AND (? IS NULL OR m.tecnico_id = ?)
+        GROUP BY m.id, m.tipo, m.descripcion, m.residencial_id, r.nombre, m.tecnico_id, tecnico.nombre,
+                 m.created_at, m.fecha_programada, m.estado_id, e.nombre`;
 
     db.query(
         sql,
+        [technicianId, technicianId],
         callback
     )
 }
 
-const overDueMaintenance = (estado, callback) => {
-    const sql = "SELECT * FROM mantenimientos m WHERE estado_id = (SELECT id FROM estados_mantenimiento WHERE nombre = ?) and fecha_programada < NOW()"
+const nextMaintenance = (technicianId, callback) => {
+    const sql = `SELECT m.id, m.tipo, m.created_at AS fecha_creacion, m.fecha_programada,
+        m.descripcion, m.estado_id, e.nombre AS estado_nombre, m.residencial_id, r.nombre AS nombre_residencial,
+        m.tecnico_id, tecnico.nombre AS tecnico_nombre
+        FROM mantenimientos AS m
+        LEFT JOIN residenciales AS r ON r.id = m.residencial_id
+        LEFT JOIN usuarios AS tecnico ON tecnico.id = m.tecnico_id
+        INNER JOIN estados_mantenimiento AS e ON e.id = m.estado_id
+        WHERE ((m.fecha_programada >= CURDATE() AND m.estado_id NOT IN (3, 4))
+            OR m.estado_id = 5)
+          AND m.eliminado_en IS NULL
+          AND (? IS NULL OR m.tecnico_id = ?)
+        ORDER BY m.fecha_programada ASC`;
+    db.query(sql, [technicianId, technicianId], callback);
+};
 
+const getMaintenanceStatuses = (callback) => {
+    db.query("SELECT id, nombre FROM estados_mantenimiento ORDER BY id", callback);
+};
 
+const createMaintenance = ({ tipo, descripcion, fecha_programada, residencial_id }, callback) => {
     db.query(
-        sql,
-        [estado],
-        callback
-    )
+        `INSERT INTO mantenimientos (tipo, descripcion, fecha_programada, estado_id, residencial_id)
+         SELECT ?, ?, ?, id, ? FROM estados_mantenimiento
+         WHERE UPPER(nombre) IN ('PROGRAMADO', 'PENDIENTE')
+         ORDER BY CASE UPPER(nombre) WHEN 'PROGRAMADO' THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [tipo, descripcion, fecha_programada, residencial_id],
+        (error, result) => {
+            if (error) return callback(error);
+            if (!result.affectedRows) return callback(new Error("No se encontró el estado Programado/Pendiente en estados_mantenimiento."));
+            callback(null, result.insertId);
+        }
+    );
+};
 
-}
+const postponeMaintenance = (id, callback) => {
+    db.query(
+        "UPDATE mantenimientos SET fecha_programada = DATE_ADD(fecha_programada, INTERVAL 3 MONTH), estado_id = 5 WHERE id = ?",
+        [id],
+        (error, result) => {
+            if (error) return callback(error);
+            callback(null, result.affectedRows > 0);
+        }
+    );
+};
 
-const nextMaintenance = (callback) => {
-    const sql = "SELECT fecha_programada, descripcion, estado_id FROM mantenimientos WHERE fecha_programada > NOW()";
+const updateMaintenanceStatus = (id, estadoId, callback) => {
+    db.query(
+        `UPDATE mantenimientos
+         SET fecha_programada = CASE WHEN ? = 5 AND estado_id <> 5
+                                     THEN DATE_ADD(fecha_programada, INTERVAL 3 MONTH)
+                                     ELSE fecha_programada END,
+             estado_id = ?
+         WHERE id = ?`,
+        [estadoId, estadoId, id],
+        (error, result) => {
+        if (error) return callback(error);
+        if (result.affectedRows > 0) return callback(null, true);
+        db.query("SELECT id FROM mantenimientos WHERE id = ?", [id], (lookupError, rows) => {
+            if (lookupError) return callback(lookupError);
+            callback(null, rows.length > 0);
+        });
+        }
+    );
+};
+
+const updateMaintenanceProperty = (id, residencialId, callback) => {
+    db.query(
+        "UPDATE mantenimientos SET residencial_id = ? WHERE id = ?",
+        [residencialId, id],
+        (error, result) => {
+            if (error) return callback(error);
+            if (result.affectedRows > 0) return callback(null, true);
+            db.query("SELECT id FROM mantenimientos WHERE id = ?", [id], (lookupError, rows) => {
+                if (lookupError) return callback(lookupError);
+                callback(null, rows.length > 0);
+            });
+        }
+    );
+};
+
+const getTechnicians = (callback) => {
+    const sql = `SELECT u.id, u.nombre, u.email, roles.nombre AS rol
+        FROM usuarios AS u
+        INNER JOIN roles ON roles.id = u.role_id
+        WHERE COALESCE(u.estado, 1) = 1
+          AND UPPER(REPLACE(REPLACE(REPLACE(roles.nombre, 'É', 'E'), 'Í', 'I'), 'Á', 'A')) LIKE '%TECN%'
+        ORDER BY u.nombre`;
     db.query(sql, callback);
 };
 
-const paymentSave = (nombre, monto, callback) => {
-    const sql = "INSERT INTO pagos (nombre, monto) VALUE(?,?)"
+const updateMaintenanceTechnician = (id, technicianId, callback) => {
+    db.query("UPDATE mantenimientos SET tecnico_id = ? WHERE id = ?", [technicianId, id], (error, result) => {
+        if (error) return callback(error);
+        if (result.affectedRows > 0) return callback(null, true);
+        db.query("SELECT id FROM mantenimientos WHERE id = ?", [id], (lookupError, rows) => {
+            if (lookupError) return callback(lookupError);
+            callback(null, rows.length > 0);
+        });
+    });
+};
+
+const deleteMaintenance = (id, callback) => {
+    db.query("UPDATE mantenimientos SET eliminado_en = CURRENT_TIMESTAMP WHERE id = ? AND eliminado_en IS NULL", [id], (error, result) => {
+        if (error) return callback(error);
+        callback(null, result.affectedRows > 0);
+    });
+};
+
+const getFacturas = (mantenimientoId, callback) => {
+    let sql = `SELECT f.id, f.nombre_original, f.tipo_mime, f.tamano_bytes, f.sha256,
+        f.proveedor, f.numero_factura, f.fecha_factura, f.total, f.mantenimiento_id,
+        f.created_at, m.tipo AS mantenimiento_tipo
+        FROM facturas AS f
+        LEFT JOIN mantenimientos AS m ON m.id = f.mantenimiento_id`;
+    const values = [];
+    if (mantenimientoId != null) { sql += " WHERE f.mantenimiento_id = ?"; values.push(mantenimientoId); }
+    sql += " ORDER BY f.created_at DESC, f.id DESC";
+    db.query(sql, values, callback);
+};
+
+const getFacturaByHash = (hash, callback) => {
+    db.query("SELECT id FROM facturas WHERE sha256 = ? LIMIT 1", [hash], (error, rows) => {
+        if (error) return callback(error);
+        callback(null, rows[0] || null);
+    });
+};
+
+const getFacturaById = (id, callback) => {
+    db.query("SELECT id, s3_object_key, nombre_original FROM facturas WHERE id = ?", [id], (error, rows) => {
+        if (error) return callback(error);
+        callback(null, rows[0] || null);
+    });
+};
+
+const createFactura = (invoice, callback) => {
+    const sql = `INSERT INTO facturas
+        (nombre_original, tipo_mime, tamano_bytes, s3_object_key, sha256, proveedor,
+         numero_factura, fecha_factura, total, datos_ocr, texto_ocr, subido_por)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    db.query(sql, [invoice.nombre_original, invoice.tipo_mime, invoice.tamano_bytes,
+        invoice.s3_object_key, invoice.sha256, invoice.proveedor, invoice.numero_factura,
+        invoice.fecha_factura, invoice.total, JSON.stringify(invoice.datos_ocr),
+        invoice.texto_ocr, invoice.subido_por], callback);
+};
+
+const associateFactura = (id, mantenimientoId, callback) => {
+    db.query("UPDATE facturas SET mantenimiento_id = ? WHERE id = ?", 
+        [mantenimientoId, id], 
+        (error, result) => {
+        if (error) 
+            return callback(error);
+        if (result.affectedRows > 0) 
+            return callback(null, true);
+
+        db.query("SELECT id FROM facturas WHERE id = ?", [id], 
+            (lookupError, rows) => {
+            if (lookupError) 
+                return callback(lookupError);
+            callback(null, rows.length > 0);
+        });
+    });
+};
+
+const paymentSave = (nombre, monto, fechaCreacion, callback) => {
+    const sql = "INSERT INTO pagos (nombre, monto, fecha_creacion) VALUES(?,?,?)"
 
     db.query(
         sql,
-        [nombre,monto],
+        [nombre, monto, fechaCreacion],
         callback
     )
 }
@@ -115,7 +251,7 @@ const createResidencial = (nombre, callback) => {
                 return callback(error);
 
             db.query(
-                "SELECT * FROM residenciales WHERE residencial_id = ?",
+                "SELECT * FROM residenciales WHERE id = ?",
                 [result.insertId],
                 (selectError, rows) => {
                     if (selectError)
@@ -131,14 +267,14 @@ const createResidencial = (nombre, callback) => {
 
 const updateResidencial = (id, nombre, callback) => {
     db.query(
-        "UPDATE residenciales SET nombre = ? WHERE residencial_id = ?",
+        "UPDATE residenciales SET nombre = ? WHERE id = ?",
         [nombre, id],
         (error) => {
             if (error)
                 return callback(error);
 
             db.query(
-                "SELECT * FROM residenciales WHERE residencial_id = ?",
+                "SELECT * FROM residenciales WHERE id = ?",
                 [id],
                 (selectError, rows) => {
                     if (selectError)
@@ -155,27 +291,44 @@ const addNewAverias = (residencial_id, descripcion, categoria, callback) => {
     db.query(
         "INSERT INTO averias (residencial_id, descripcion, categoria) VALUE(?,?,?)",
         [residencial_id, descripcion, categoria],
-        (error) => {
-            if (error)
-                return callback(error);
-
-            db.query(
-                "SELECT * FROM averias",
-                (selectError, rows) => {
-                    if (selectError)
-                        return callback(selectError);
-
-                    callback(null, rows[0] || null);
-                }
-            );
+        (error, result) => {
+            if (error) return callback(error);
+            db.query("SELECT id, residencial_id, descripcion, categoria, fecha, estado FROM averias WHERE id = ?", [result.insertId], (selectError, rows) => {
+                if (selectError) return callback(selectError);
+                callback(null, rows[0] || null);
+            });
         }
     );
+};
+
+const updateAveriaStatus = (id, estado, callback) => {
+    db.query("UPDATE averias SET estado = ? WHERE id = ? AND eliminada_en IS NULL", [estado, id], (error, result) => {
+        if (error) return callback(error);
+        if (result.affectedRows > 0) return callback(null, true);
+        db.query("SELECT id FROM averias WHERE id = ? AND eliminada_en IS NULL", [id], (lookupError, rows) => {
+            if (lookupError) return callback(lookupError);
+            callback(null, rows.length > 0);
+        });
+    });
+};
+
+const archiveCompletedAveria = (id, callback) => {
+    db.query("UPDATE averias SET eliminada_en = NOW() WHERE id = ? AND estado = 'Completada' AND eliminada_en IS NULL", [id], (error, result) => {
+        if (error) return callback(error);
+        if (result.affectedRows > 0) return callback(null, { deleted: true });
+        db.query("SELECT estado, eliminada_en FROM averias WHERE id = ?", [id], (lookupError, rows) => {
+            if (lookupError) return callback(lookupError);
+            if (!rows.length) return callback(null, { found: false });
+            if (rows[0].eliminada_en) return callback(null, { found: true, deleted: false, alreadyArchived: true });
+            callback(null, { found: true, deleted: false, completed: rows[0].estado === "Completada" });
+        });
+    });
 };
 
 
 const deleteResidencial = (id, callback) => {
     db.query(
-        "DELETE FROM residenciales WHERE residencial_id = ?",
+        "DELETE FROM residenciales WHERE id = ?",
         [id],
         (error, result) => {
             if (error)
@@ -194,6 +347,7 @@ const getPropietarios = (callback) => {
         FROM usuarios AS u
         LEFT JOIN residenciales AS r ON r.id = u.residencial_id
         LEFT JOIN roles ON roles.id = u.role_id
+        WHERE COALESCE(u.estado, 1) = 1
         ORDER BY u.id DESC`;
     db.query(sql, callback);
 };
@@ -218,7 +372,8 @@ const updateUsuario = (id, { nombre, email, role_id, residencial_id }, callback)
 };
 
 const deleteUsuario = (id, callback) => {
-    db.query("DELETE FROM usuarios WHERE id = ?", [id], (error, result) => {
+    // Keep payment history and its foreign-key relationship; deactivate the account instead.
+    db.query("UPDATE usuarios SET estado = 0 WHERE id = ? AND COALESCE(estado, 1) = 1", [id], (error, result) => {
         if (error) return callback(error);
         callback(null, result.affectedRows > 0);
     });
@@ -357,11 +512,8 @@ const updateAreaReservationState = (id, estado, callback) => {
 
 
 module.exports = ({
-    postClient,
-    getUser,
     logIn,
     register,
-    overDueMaintenance,
     paymentSave,
     getResidenciales,
     createResidencial,
@@ -376,9 +528,24 @@ module.exports = ({
     updatePago,
     deletePago,
     maintenance,
+    createMaintenance,
+    postponeMaintenance,
+    getMaintenanceStatuses,
+    updateMaintenanceStatus,
+    updateMaintenanceProperty,
+    getTechnicians,
+    updateMaintenanceTechnician,
+    deleteMaintenance,
+    getFacturas,
+    getFacturaByHash,
+    getFacturaById,
+    createFactura,
+    associateFactura,
     nextMaintenance,
     addNewAverias,
     getAverias,
+    updateAveriaStatus,
+    archiveCompletedAveria,
     getAreasSociales,
     getAreaSocialById,
     createAreaSocial,

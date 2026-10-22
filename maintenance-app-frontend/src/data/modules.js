@@ -12,8 +12,8 @@ export const navigation = {
 export const headers = {
   propietarios: ["Usuario", "Residencial", "Correo", "Tipo de rol"],
   pagos: ["Fecha", "Propietario", "Valor", "Estado"],
-  mantenimientos: ["Actividad", "Descripción", "Fecha", "Estado", "Facturas"],
-  novedades: ["Novedad", "Categoría", "Residencial", "Fecha"],
+  mantenimientos: ["Actividad", "Descripción", "Propiedad", "Creado el", "Fecha límite", "Estado", "Técnico", "Facturas"],
+  novedades: ["Novedad", "Categoría", "Residencial", "Fecha", "Estado"],
 };
 
 export const endpoints = {
@@ -22,6 +22,7 @@ export const endpoints = {
   mantenimientos: "/mantenimiento",
   averias: "/averias",
   proximosMantenimientos: "/nextmaintenance",
+  residenciales: "/residenciales",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("es-CO", {
@@ -79,7 +80,7 @@ export const toTableRows = (type, data) =>
       cells: [
         formatDate(item.fecha_creacion ?? item.fecha),
         item.nombre ?? item.propietario,
-        item.valor ?? item.monto,
+        formatMoney(item.valor ?? item.monto),
         item.estado ?? "Registrado"
       ]
     };
@@ -90,19 +91,27 @@ export const toTableRows = (type, data) =>
       cells: [
         item.tipo ?? item.actividad,
         item.descripcion,
+        item.nombre_residencial ?? "Sin propiedad asignada",
+        formatDate(item.fecha_creacion),
         formatDate(item.fecha_programada ?? item.fecha),
-        item.estado_id ?? item.estado,
+        item.estado_nombre ?? item.estado ?? item.estado_id,
+        item.tecnico_nombre ?? "N/A",
         Number(item.facturas_count) ? `${item.facturas_count} ${Number(item.facturas_count) === 1 ? "factura" : "facturas"}` : "Sin facturas"
       ]
     };
 
-    case "averias": return [
-      item.descripcion,
-      item.categoria,
-      item.nombre_residencial,
-      formatDate(item.fecha)
-    ];
+    case "averias": return {
+      id: item.id,
+      item,
+      cells: [item.descripcion, item.categoria, item.nombre_residencial ?? "—", formatDate(item.fecha), item.estado ?? "Reportada"]
+    };
 
     default: return Object.values(item);
   }
 });
+
+const paymentFormatter = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+export const formatMoney = (value) => {
+  const amount = Number(value);
+  return `$${paymentFormatter.format(Number.isFinite(amount) ? amount : 0)}`;
+};

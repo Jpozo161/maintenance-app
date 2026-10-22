@@ -5,7 +5,6 @@ const initialForm = {
   title: "", 
   residencial_id: "", 
   categoria: "", 
-  priority: "Media", 
   descripcion: "" 
 };
 
@@ -13,8 +12,6 @@ export default function FailureReport({ onToast }) {
 
   const [data, setData] = useState([]);
   const [error, setError] = useState("");
-  console.log(data)
-
   useEffect(() => {
     let active = true;
 
@@ -47,7 +44,7 @@ const addingAveria = async () => {
   try {
     await addNewAveria({
       residencial_id: form.residencial_id,
-      descripcion: form.descripcion,
+      descripcion: `Asunto: ${form.title.trim()}\n${form.descripcion.trim()}`,
       categoria: form.categoria
     });
     onToast("Avería reportada correctamente");
@@ -58,7 +55,6 @@ const addingAveria = async () => {
 }
   
   const [form, setForm] = useState(initialForm);
-  console.log(form)
 
   const change = event => setForm(
     { ...form, 
@@ -95,13 +91,11 @@ const addingAveria = async () => {
 
         <div className="form-row">
           <label>
-            Ubicación
+            Residencial
             <select required name="residencial_id" value={form.residencial_id} onChange={change}>
               <option value="" disabled>
-                Selecciona una ubicación
+                Selecciona un residencial
               </option>
-
-              <option>Zona común</option>
 
               {data.map((x) => (
                 <option key={x.id || x.nombre} value={x.id}>
@@ -124,15 +118,6 @@ const addingAveria = async () => {
           </label>
           
         </div>
-
-        <label>
-          Prioridad
-          <select name="priority" value={form.priority} onChange={change}>
-            <option>Alta</option>
-            <option>Media</option>
-            <option>Baja</option>
-          </select>
-        </label>
 
         <label>
           Descripción

@@ -1,11 +1,9 @@
+require("dotenv").config();
 const express = require("express")
 const app = express()
 const cors = require("cors")
 const db = require("./db")
 const cookieParser = require("cookie-parser")
-const WebSocket = require("ws");
-
-const wss = new WebSocket.Server({ port: 8081 });
 
 app.use(express.json())
 

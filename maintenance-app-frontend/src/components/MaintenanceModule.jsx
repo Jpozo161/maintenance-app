@@ -2,19 +2,33 @@ import { useEffect, useState } from "react";
 import { headers, navigation, toTableRows } from "../data/modules";
 import {
   api,
+  deleteMaintenance,
   deletePago,
   deleteUsuario,
   getResidenciales,
   getRoles,
   getFacturas,
+  getMaintenanceStatuses,
+  getTechnicians,
   getOriginalFacturaUrl,
+  postponeMaintenance,
+  updateMaintenanceProperty,
+  updateMaintenanceStatus,
+  updateMaintenanceTechnician,
   updatePago,
   updateUsuario,
 } from "../services/api";
 import DataTable from "./DataTable";
 import Form from "./form";
 
-export default function MaintenanceModule({ type, onToast, objects }) {
+const maintenanceStatusClass = (statusName = "") => statusName
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("es")
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-|-$/g, "");
+
+export default function MaintenanceModule({ type, onToast, objects, readOnly = false }) {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -24,6 +38,16 @@ export default function MaintenanceModule({ type, onToast, objects }) {
   const [residenciales, setResidenciales] = useState([]);
   const [savingUser, setSavingUser] = useState(false);
   const [maintenanceInvoices, setMaintenanceInvoices] = useState(null);
+  const [propertyMaintenance, setPropertyMaintenance] = useState(null);
+  const [maintenancePropertyOptions, setMaintenancePropertyOptions] = useState([]);
+  const [maintenancePropertyId, setMaintenancePropertyId] = useState("");
+  const [savingMaintenanceProperty, setSavingMaintenanceProperty] = useState(false);
+  const [technicianMaintenance, setTechnicianMaintenance] = useState(null);
+  const [technicianOptions, setTechnicianOptions] = useState([]);
+  const [maintenanceTechnicianId, setMaintenanceTechnicianId] = useState("");
+  const [savingTechnician, setSavingTechnician] = useState(false);
+  const [maintenanceStatuses, setMaintenanceStatuses] = useState([]);
+  const [savingStatusId, setSavingStatusId] = useState(null);
   const loading = rows === null;
   const singular = { propietarios: "usuario", pagos: "pago", mantenimientos: "mantenimiento" }[type] ?? "registro";
 
@@ -34,11 +58,21 @@ export default function MaintenanceModule({ type, onToast, objects }) {
 
   useEffect(() => {
     let active = true;
-    api(null, type, "GET")
+    Promise.resolve()
+      .then(() => api(null, type, "GET"))
       .then((data) => { if (active) setRows(toTableRows(type, data)); })
       .catch((err) => { if (active) { setError(err.message); setRows([]); } });
     return () => { active = false; };
   }, [type]);
+
+  useEffect(() => {
+    if (type !== "mantenimientos" || readOnly) return undefined;
+    let active = true;
+    getMaintenanceStatuses()
+      .then((data) => { if (active) setMaintenanceStatuses(Array.isArray(data) ? data : data?.data ?? []); })
+      .catch((err) => { if (active) setError(`No se pudieron cargar los estados: ${err.message}`); });
+    return () => { active = false; };
+  }, [type, readOnly]);
 
   const editPayment = async (row) => {
     if (row.id == null) { setError("El API no devolvió el identificador del pago."); return; }
@@ -127,20 +161,124 @@ export default function MaintenanceModule({ type, onToast, objects }) {
     <button type="button" role="menuitem" className="danger" onClick={() => { close(); deleteUser(row); }}>Eliminar</button>
   </>;
 
-  const maintenanceActions = (row, close) => <button type="button" role="menuitem" onClick={async () => {
-    close(); setError("");
+  const openMaintenanceInvoices = async (row) => {
+    setError("");
     try {
       const invoices = await getFacturas(row.id);
       setMaintenanceInvoices({ id: row.id, tipo: row.item.tipo ?? row.item.descripcion, invoices: Array.isArray(invoices) ? invoices : [] });
     } catch (err) { setError(`No se pudieron cargar las facturas del mantenimiento: ${err.message}`); }
-  }}>Ver facturas asociadas</button>;
+  };
+
+  const deferMaintenance = async (row) => {
+    if (row.id == null) { setError("El API no devolvió el identificador del mantenimiento."); return; }
+    if (!window.confirm(`¿Posponer “${row.item.tipo ?? row.item.descripcion}” tres meses desde su fecha límite actual?`)) return;
+    try {
+      setError(""); setNotice("");
+      await postponeMaintenance(row.id);
+      await loadRows();
+      setNotice("Mantenimiento reprogramado tres meses después de su fecha límite anterior.");
+    } catch (err) { setError(`No se pudo posponer el mantenimiento: ${err.message}`); }
+  };
+
+  const removeMaintenance = async (row) => {
+    if (row.id == null) { setError("El API no devolvió el identificador del mantenimiento."); return; }
+    const name = row.item.tipo ?? row.item.descripcion ?? "este mantenimiento";
+    if (!window.confirm(`¿Eliminar “${name}” de la lista? El historial y las facturas se conservarán.`)) return;
+    try {
+      setError(""); setNotice("");
+      await deleteMaintenance(row.id);
+      await loadRows();
+      setNotice("Mantenimiento eliminado de la lista; su historial y facturas se conservaron.");
+    } catch (err) { setError(`No se pudo eliminar el mantenimiento: ${err.message}`); }
+  };
+
+  const changeMaintenanceStatus = async (row, statusId) => {
+    if (row.id == null || !statusId) return;
+    setSavingStatusId(row.id); setError(""); setNotice("");
+    try {
+      await updateMaintenanceStatus(row.id, Number(statusId));
+      await loadRows();
+      const status = maintenanceStatuses.find((item) => Number(item.id) === Number(statusId));
+      setNotice(`Estado actualizado a “${status?.nombre ?? "nuevo estado"}”.`);
+    } catch (err) { setError(`No se pudo actualizar el estado: ${err.message}`); }
+    finally { setSavingStatusId(null); }
+  };
+
+  const assignMaintenanceProperty = async (row) => {
+    if (row.id == null) { setError("El API no devolvió el identificador del mantenimiento."); return; }
+    try {
+      setError(""); setNotice("");
+      const properties = await getResidenciales();
+      setMaintenancePropertyOptions(Array.isArray(properties) ? properties : properties?.data ?? []);
+      setMaintenancePropertyId(String(row.item.residencial_id ?? ""));
+      setPropertyMaintenance(row);
+    } catch (err) { setError(`No se pudieron cargar las propiedades: ${err.message}`); }
+  };
+
+  const saveMaintenanceProperty = async (event) => {
+    event.preventDefault();
+    if (!propertyMaintenance?.id || !maintenancePropertyId) return;
+    setSavingMaintenanceProperty(true); setError(""); setNotice("");
+    try {
+      await updateMaintenanceProperty(propertyMaintenance.id, Number(maintenancePropertyId));
+      setPropertyMaintenance(null);
+      await loadRows();
+      setNotice("Propiedad del mantenimiento actualizada correctamente.");
+    } catch (err) { setError(`No se pudo asignar la propiedad: ${err.message}`); }
+    finally { setSavingMaintenanceProperty(false); }
+  };
+
+  const assignMaintenanceTechnician = async (row) => {
+    if (row.id == null) { setError("El API no devolvió el identificador del mantenimiento."); return; }
+    try {
+      setError(""); setNotice("");
+      const data = await getTechnicians();
+      const options = Array.isArray(data) ? data : data?.data ?? [];
+      setTechnicianOptions(options);
+      setMaintenanceTechnicianId(String(row.item.tecnico_id ?? ""));
+      setTechnicianMaintenance(row);
+    } catch (err) { setError(`No se pudieron cargar los técnicos: ${err.message}`); }
+  };
+
+  const saveMaintenanceTechnician = async (event) => {
+    event.preventDefault();
+    if (!technicianMaintenance?.id) return;
+    setSavingTechnician(true); setError(""); setNotice("");
+    try {
+      await updateMaintenanceTechnician(technicianMaintenance.id, maintenanceTechnicianId || null);
+      setTechnicianMaintenance(null);
+      await loadRows();
+      setNotice("Técnico del mantenimiento actualizado correctamente.");
+    } catch (err) { setError(`No se pudo asignar el técnico: ${err.message}`); }
+    finally { setSavingTechnician(false); }
+  };
+
+  const maintenanceRowActions = (row, close) => <>
+    <button type="button" role="menuitem" onClick={() => { close(); openMaintenanceInvoices(row); }}>Ver facturas asociadas</button>
+    <button type="button" role="menuitem" onClick={() => { close(); assignMaintenanceProperty(row); }}>{row.item.residencial_id ? "Cambiar propiedad" : "Asignar propiedad"}</button>
+    <button type="button" role="menuitem" onClick={() => { close(); assignMaintenanceTechnician(row); }}>{row.item.tecnico_id ? "Cambiar técnico" : "Asignar técnico"}</button>
+    <button type="button" role="menuitem" onClick={() => { close(); deferMaintenance(row); }}>Posponer 3 meses</button>
+    <button type="button" role="menuitem" className="danger" onClick={() => { close(); removeMaintenance(row); }}>Eliminar</button>
+  </>;
+
+  const renderMaintenanceCell = (row, columnIndex) => columnIndex === 5 ? (
+    <select
+      className={`maintenance-status-select maintenance-status-${maintenanceStatusClass(maintenanceStatuses.find((status) => Number(status.id) === Number(row.item.estado_id))?.nombre ?? row.item.estado_nombre)}`}
+      aria-label={`Estado de ${row.item.tipo ?? "mantenimiento"}`}
+      value={String(row.item.estado_id ?? "")}
+      disabled={savingStatusId === row.id || !maintenanceStatuses.length}
+      onChange={(event) => changeMaintenanceStatus(row, event.target.value)}
+    >
+      {maintenanceStatuses.map((status) => <option key={status.id} value={status.id}>{status.nombre}</option>)}
+    </select>
+  ) : undefined;
 
   if (objects === "open") return <Form type={type} showToast={onToast} objects={objects} />;
 
   return <section className="content">
     <div className="module-head">
-      <div><p>ADMINISTRACIÓN</p><h2>{navigation[type]?.title ?? type}</h2><span>Gestiona la información registrada en el conjunto.</span></div>
-      <button onClick={() => onToast(`Registrar ${singular}`, "open")}>+ Nuevo {singular}</button>
+      <div><p>{readOnly ? "CONSULTA" : "ADMINISTRACIÓN"}</p><h2>{navigation[type]?.title ?? type}</h2><span>{readOnly ? "Consulta los mantenimientos del conjunto." : "Gestiona la información registrada en el conjunto."}</span></div>
+      {!readOnly && <button onClick={() => onToast(`Registrar ${singular}`, "open")}>+ Nuevo {singular}</button>}
     </div>
 
     {editingUser && <form className="panel report-form" onSubmit={saveUser}>
@@ -158,6 +296,37 @@ export default function MaintenanceModule({ type, onToast, objects }) {
       <div className="form-actions"><button type="button" onClick={() => setEditingUser(null)} disabled={savingUser}>Cancelar</button><button type="submit" disabled={savingUser}>{savingUser ? "Guardando…" : "Guardar cambios"}</button></div>
     </form>}
 
+    {propertyMaintenance && <form className="panel report-form" onSubmit={saveMaintenanceProperty}>
+      <h3>Asignar propiedad al mantenimiento</h3>
+      <p className="form-note">{propertyMaintenance.item.tipo ?? "Mantenimiento"} · {propertyMaintenance.item.descripcion}</p>
+      <label htmlFor="maintenance-property"><span>Propiedad / Residencial</span>
+        <select id="maintenance-property" value={maintenancePropertyId} onChange={(event) => setMaintenancePropertyId(event.target.value)} required>
+          <option value="" disabled>Selecciona una propiedad</option>
+          {maintenancePropertyOptions.map((property) => <option key={property.id} value={property.id}>{property.nombre}</option>)}
+        </select>
+      </label>
+      <div className="form-actions">
+        <button type="button" onClick={() => setPropertyMaintenance(null)} disabled={savingMaintenanceProperty}>Cancelar</button>
+        <button type="submit" disabled={savingMaintenanceProperty || !maintenancePropertyId}>{savingMaintenanceProperty ? "Guardando…" : "Guardar propiedad"}</button>
+      </div>
+    </form>}
+
+    {technicianMaintenance && <form className="panel report-form" onSubmit={saveMaintenanceTechnician}>
+      <h3>Asignar técnico al mantenimiento</h3>
+      <p className="form-note">{technicianMaintenance.item.tipo ?? "Mantenimiento"} · {technicianMaintenance.item.descripcion}</p>
+      <label htmlFor="maintenance-technician"><span>Técnico</span>
+        <select id="maintenance-technician" value={maintenanceTechnicianId} onChange={(event) => setMaintenanceTechnicianId(event.target.value)}>
+          <option value="">N/A · Sin técnico asignado</option>
+          {technicianOptions.map((technician) => <option key={technician.id} value={technician.id}>{technician.nombre}{technician.email ? ` · ${technician.email}` : ""}</option>)}
+        </select>
+      </label>
+      {!technicianOptions.length && <p className="form-note">No hay usuarios activos con rol de técnico. Agrega un usuario con ese rol para asignarlo.</p>}
+      <div className="form-actions">
+        <button type="button" onClick={() => setTechnicianMaintenance(null)} disabled={savingTechnician}>Cancelar</button>
+        <button type="submit" disabled={savingTechnician}>{savingTechnician ? "Guardando…" : "Guardar técnico"}</button>
+      </div>
+    </form>}
+
     {maintenanceInvoices && <section className="panel maintenance-invoices-panel">
       <div className="panel-title"><div><h3>Facturas del mantenimiento #{maintenanceInvoices.id}</h3><p>{maintenanceInvoices.tipo || "Documentos asociados manualmente"}</p></div><button type="button" onClick={() => setMaintenanceInvoices(null)}>Cerrar</button></div>
       {maintenanceInvoices.invoices.length ? <ul className="maintenance-invoice-list">{maintenanceInvoices.invoices.map((invoice) => <li key={invoice.id}><div><strong>{invoice.nombre_original}</strong><span>{invoice.proveedor || "Proveedor sin detectar"} · {invoice.numero_factura || "Sin número"}</span></div><a href={getOriginalFacturaUrl(invoice.id)} target="_blank" rel="noreferrer">Abrir factura</a></li>)}</ul> : <p>Este mantenimiento todavía no tiene facturas asociadas.</p>}
@@ -166,7 +335,7 @@ export default function MaintenanceModule({ type, onToast, objects }) {
     <section className="panel">
       {error && <p className="load-error" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      {loading ? <p className="table-loading">Cargando información…</p> : <DataTable columns={headers[type] ?? []} rows={rows} renderActions={type === "pagos" ? paymentActions : type === "propietarios" ? userActions : type === "mantenimientos" ? maintenanceActions : undefined} />}
+      {loading ? <p className="table-loading">Cargando información…</p> : <DataTable columns={headers[type] ?? []} rows={rows} renderCell={type === "mantenimientos" && !readOnly ? renderMaintenanceCell : undefined} renderActions={readOnly ? undefined : type === "pagos" ? paymentActions : type === "propietarios" ? userActions : type === "mantenimientos" ? maintenanceRowActions : undefined} />}
     </section>
   </section>;
 }
