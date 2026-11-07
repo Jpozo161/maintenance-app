@@ -17,11 +17,32 @@ export default function AveriasModule() {
 
   return <section className="content">
     <div className="module-head">
-      <div><p>CONSULTA</p><h2>Averías</h2><span>Consulta los reportes registrados en el conjunto.</span></div>
+
+      <div>
+        <p>
+          CONSULTA
+        </p>
+        <h2>
+          Averías
+        </h2>
+        
+        <span>
+          Consulta los reportes registrados en el conjunto.
+        </span>
+      </div>
+
     </div>
+
     <section className="panel">
-      {error && <p className="load-error" role="alert">No se pudieron cargar las averías: {error}</p>}
-      {rows === null ? <p className="table-loading">Cargando averías…</p> : <DataTable columns={headers.novedades} rows={rows} />}
+      {error && 
+        <p className="load-error" role="alert">
+          No se pudieron cargar las averías: {error}
+        </p>}
+
+      {rows === null 
+        ? <p className="table-loading">Cargando averías…</p> 
+        : <DataTable columns={headers.novedades} rows={rows} />
+        }
     </section>
   </section>;
 }

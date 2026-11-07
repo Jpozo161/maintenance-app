@@ -121,7 +121,10 @@ const addingAveria = async () => {
 
         <label>
           Descripción
-          <textarea required name="descripcion" value={form.descripcion} onChange={change} 
+          <textarea 
+            required name="descripcion" 
+            value={form.descripcion} 
+            onChange={change} 
             placeholder="Describe la avería, cuándo ocurrió y cualquier detalle relevante." rows="5" />
         </label>
 

@@ -1,0 +1,14 @@
+node_modules
+
+# El .env no se copia a la imagen a propósito: las variables (JWT_SECRET, DB_HOST,
+# credenciales de S3) se pasan en tiempo de ejecución desde compose, para no hornear
+# secretos en una capa de la imagen.
+.env
+
+.DS_Store
+*.log
+tests
+docs
+*.md
+Dockerfile
+.dockerignore

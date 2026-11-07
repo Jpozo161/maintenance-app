@@ -54,6 +54,51 @@ export const getResidenciales = () =>
 export const getAllAverias = () =>
   requestResource("/averias")
 
+export const getMaintenanceStatuses = () =>
+  requestResource("/estados-mantenimiento");
+
+export const getTechnicians = () =>
+  requestResource("/tecnicos");
+
+// Crea un mantenimiento nuevo a partir de uno completado o cancelado.
+export const createNextMaintenance = (id, meses) =>
+  requestResource(`/mantenimiento/${encodeURIComponent(id)}/siguiente`, {
+    method: "POST",
+    body: JSON.stringify({ meses: Number(meses) }),
+  });
+
+export const updateMaintenanceStatus = (id, estadoId) =>
+  requestResource(`/mantenimiento/${encodeURIComponent(id)}/estado`, {
+    method: "PATCH",
+    body: JSON.stringify({ estado_id: Number(estadoId) }),
+  });
+
+export const updateMaintenanceProperty = (id, residencialId) =>
+  requestResource(`/mantenimiento/${encodeURIComponent(id)}/propiedad`, {
+    method: "PATCH",
+    body: JSON.stringify({ residencial_id: Number(residencialId) }),
+  });
+
+export const updateMaintenanceTechnician = (id, tecnicoId) =>
+  requestResource(`/mantenimiento/${encodeURIComponent(id)}/tecnico`, {
+    method: "PATCH",
+    body: JSON.stringify({ tecnico_id: tecnicoId == null || tecnicoId === "" ? null : Number(tecnicoId) }),
+  });
+
+export const deleteMaintenance = (id) =>
+  requestResource(`/mantenimiento/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+export const updateAveriaStatus = (id, estado) =>
+  requestResource(`/averias/${encodeURIComponent(id)}/estado`, {
+    method: "PATCH",
+    body: JSON.stringify({ estado }),
+  })
+
+export const deleteAveria = (id) =>
+  requestResource(`/averias/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  })
+
 
 // POST
 export const createResidencial = (data) =>
@@ -75,6 +120,20 @@ export const updateResidencial = (id, data) =>
     method: "PUT",
     body: JSON.stringify(data)
   });
+
+
+// Apartamentos y casas de un residencial (tabla apartamentos_casas).
+export const getApartamentos = (residencialId) =>
+  requestResource("/apartamentos" + (residencialId ? "?residencial_id=" + encodeURIComponent(residencialId) : ""));
+
+export const createApartamento = (data) =>
+  requestResource("/apartamentos", { method: "POST", body: JSON.stringify(data) });
+
+export const updateApartamento = (id, data) =>
+  requestResource(`/apartamentos/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const deleteApartamento = (id) =>
+  requestResource(`/apartamentos/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 
 // DELETE
@@ -126,42 +185,49 @@ export const createAreaReservation = (data) =>
 export const reviewAreaReservation = (id, estado) =>
   requestResource("/reservas/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ estado }) });
 
+// Sin residencialId devuelve los residentes del residencial de la cuenta (recepción).
+export const getResidentes = (residencialId) =>
+  requestResource("/residentes" + (residencialId ? "?residencial_id=" + encodeURIComponent(residencialId) : ""));
 
-export const previewInvoice = (file) => {
-  if (!file) 
-    return Promise.reject(new Error("Selecciona un archivo."
-  ));
-  if (file.size > 20 * 1024 * 1024) 
-    return Promise.reject(new Error("El archivo supera el límite de 20 MB."
-  ));
-  return requestResource("/ocr", {
+export const getVisitas = () => requestResource("/visitas");
+
+export const createVisita = (data) =>
+  requestResource("/visitas", { method: "POST", body: JSON.stringify(data) });
+
+
+// Documentos PDF de los mantenimientos (bucket S3 privado).
+// Sin mantenimientoId devuelve el historial completo de documentos guardados.
+export const getDocumentos = (mantenimientoId) =>
+  requestResource("/documentos" + (mantenimientoId == null ? "" : `?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`));
+
+// vista: "activos" | "historial"; sin vista devuelve todos.
+export const getMantenimientos = (vista) =>
+  requestResource(vista ? `/mantenimiento?vista=${encodeURIComponent(vista)}` : "/mantenimiento");
+
+// Sube el PDF crudo; el mantenimiento va en la query porque el body es el archivo.
+export const uploadDocumento = (file, mantenimientoId) =>
+  requestResource(`/documentos?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "application/octet-stream" },
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+      "X-File-Type": file.type || "application/pdf"
+    },
     body: file
-  }, 90000);
-};
+  }, 120000);
 
-export const getFacturas = (mantenimientoId) => {
-  const query = mantenimientoId == null 
-    ? "" 
-    : `?mantenimiento_id=${encodeURIComponent(mantenimientoId)}`;
-  return requestResource(`/facturas${query}`);
-};
+export const associateDocumento = (id, mantenimientoId) =>
+  requestResource(`/documentos/${encodeURIComponent(id)}/mantenimiento`, {
+    method: "PATCH",
+    body: JSON.stringify({ mantenimiento_id: mantenimientoId })
+  });
 
-export const getMantenimientos = () => requestResource("/mantenimiento");
+export const archiveDocumento = (id) =>
+  requestResource(`/documentos/${encodeURIComponent(id)}`, { method: "DELETE" });
 
-export const uploadFactura = (file) => requestResource("/facturas", {
-  method: "POST",
-  headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "application/octet-stream" },
-  body: file
-}, 120000);
-
-export const associateFactura = (id, mantenimientoId) => requestResource(`/facturas/${encodeURIComponent(id)}/mantenimiento`, {
-  method: "PATCH",
-  body: JSON.stringify({ mantenimiento_id: mantenimientoId })
-});
-
-export const getOriginalFacturaUrl = (id) => `${API_BASE_URL}/facturas/${encodeURIComponent(id)}/original`;
+// accion: "ver" (abre en el navegador) o "descargar". El backend redirige a un enlace temporal de S3.
+export const getDocumentoUrl = (id, accion = "ver") =>
+  `${API_BASE_URL}/documentos/${encodeURIComponent(id)}/${accion}`;
 
 
 export const loginUser = (credentials) =>
@@ -183,7 +249,8 @@ export const api = (form, which, method = "POST") => {
     pagos: "/pagos",
     mantenimientos: "/mantenimiento",
     averias: "/averias",
-    proximosMantenimientos: "/nextmaintenance"
+    proximosMantenimientos: "/nextmaintenance",
+    residenciales: "/residenciales"
   };
 
   const postPaths = {

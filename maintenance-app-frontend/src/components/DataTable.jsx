@@ -3,7 +3,12 @@ import { createPortal } from "react-dom";
 
 const cellsOf = (row) => Array.isArray(row) ? row : row?.cells ?? [];
 
-export default function DataTable({ columns = [], rows = [], pageSize = 8, renderActions, renderCell }) {
+export default function DataTable({ 
+  columns = [], 
+  rows = [], 
+  pageSize = 8, 
+  renderActions, 
+  renderCell }) {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -11,7 +16,8 @@ export default function DataTable({ columns = [], rows = [], pageSize = 8, rende
   const [openActions, setOpenActions] = useState(null);
 
   useEffect(() => {
-    if (!openActions) return undefined;
+    if (!openActions) 
+      return undefined;
     const close = () => setOpenActions(null);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
@@ -27,9 +33,9 @@ export default function DataTable({ columns = [], rows = [], pageSize = 8, rende
 
   const filteredRows = rows.filter((row) => {
     const cells = cellsOf(row);
-    const query = search.trim().toLocaleLowerCase("es-CO");
+    const query = search.trim().toLocaleLowerCase("es-DO");
     const matchesSearch = cells.some((cell) => 
-      String(cell ?? "").toLocaleLowerCase("es-CO").includes(query)
+      String(cell ?? "").toLocaleLowerCase("es-DO").includes(query)
   );
     return matchesSearch && (!columnFilter || String(cells.at(-1) ?? "").trim() === columnFilter);
   });
@@ -49,10 +55,24 @@ export default function DataTable({ columns = [], rows = [], pageSize = 8, rende
       <div className="table-tools">
 
         <label className="search">⌕
-          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Buscar..." aria-label="Buscar en la tabla" />
+          <input 
+            value={search} 
+            onChange={(event) => { setSearch(event.target.value); 
+            setPage(0); }} 
+            placeholder="Buscar..." 
+            aria-label="Buscar en la tabla" 
+            />
+
         </label>
-        <button className="filter" type="button" aria-expanded={filterOpen} onClick={() => 
-          setFilterOpen((open) => !open)}>☷ Filtrar</button>
+        <button 
+          className="filter" 
+          type="button" 
+          aria-expanded={filterOpen} 
+          onClick={() => 
+            setFilterOpen((open) => !open)}>
+              ☷ Filtrar
+        </button>
+        
       </div>
 
       {filterOpen && 

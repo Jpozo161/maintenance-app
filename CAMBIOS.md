@@ -1,5 +1,15 @@
 # Cambios OCR
 
+## Documentos de mantenimientos (reemplaza el OCR de facturas)
+
+- La sección «Facturas» (OCR) pasa a ser «Documentos»: se suben archivos PDF asociados a un mantenimiento existente y se guardan en el bucket S3 privado; MySQL guarda los metadatos en la nueva tabla `documentos_mantenimiento` (migración `009_documentos_mantenimiento.sql`, que además elimina la tabla `facturas`, vacía).
+- Endpoints (solo ADMIN): `GET /documentos` (historial, con `?mantenimiento_id=`), `POST /documentos?mantenimiento_id=`, `PATCH /documentos/:id/mantenimiento`, `GET /documentos/:id/ver`, `GET /documentos/:id/descargar` y `DELETE /documentos/:id` (archivado lógico; el archivo se conserva en S3). Ver y descargar redirigen a un enlace firmado de 5 minutos.
+- Solo se aceptan PDF (extensión, tipo y contenido `%PDF-`), hasta 20 MB. El mismo PDF no se puede asociar dos veces al mismo mantenimiento; en S3 se guarda una sola copia por sha256.
+- En Mantenimientos, «Ver facturas asociadas» pasa a «Ver documentos» (con Ver y Descargar) y la columna «Facturas» pasa a «Documentos».
+- S3 queda listo para conectar: llenar `S3_BUCKET`, `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` en el `.env` y comprobar con `npm run s3:check` (sube, lee y borra un archivo de prueba).
+- Se eliminaron el componente y los estilos del OCR, la llamada a `/ocr` y `docs/CONTRATO-OCR.md`.
+- Verificación: `npm test` del backend (incluye `tests/documentos.test.js`), índice único con columna generada probado en una tabla temporal de MySQL, `npm run build` y `npm run lint` del frontend. La subida real a S3 queda pendiente de las credenciales.
+
 ## Dashboard de técnicos y formulario de usuarios
 
 - El dashboard conserva sus listas iniciales vacías al cargar solo los endpoints permitidos al técnico; el total de pagos también tolera una lista ausente, evitando el error al ejecutar `pagos.reduce`.
@@ -67,3 +77,22 @@
 - Se reutilizó la tabla `historial_mantenimiento` que ya existía en la base (con sus FK a mantenimiento y estado). Los triggers registran el estado inicial y cada transición real con fecha/hora en sus columnas existentes `estado_id` y `fecha`.
 - La acción “Posponer 3 meses” también cambia el estado a ID 5 (“Próximo mantenimiento”).
 - La migración está documentada en `maintenance-app-project/sql/historial-mantenimiento.sql` y fue aplicada a la base local.
+
+## Número de mantenimiento y buscador en documentos
+
+- Las tablas de mantenimientos (activos e historial) muestran una primera columna “N.º” con el número del mantenimiento (`#id`), que es el identificador que ya usaban la base de datos y los documentos. No hizo falta una columna nueva ni una migración.
+- En el módulo de documentos, el desplegable de mantenimientos se reemplazó por un botón que abre un cuadro pequeño sobre el formulario (`MaintenancePicker.jsx`): un buscador filtra por número (`12` o `#12`, por coincidencia desde el inicio) y, si el texto no es un número, por actividad, descripción, propiedad, estado o técnico. La lista muestra 40 resultados e indica cuántos hay en total, para que con cientos de mantenimientos no haya que recorrer el desplegable.
+- El mismo cuadro se usa al cambiar el mantenimiento de un documento ya guardado.
+- El buscador recibe el foco al abrir, Enter elige el primer resultado sin enviar el formulario, y Escape o un clic fuera cierran el cuadro.
+- La columna de estado editable de la tabla de mantenimientos se recorrió al índice 6 porque la columna del número va delante.
+- Verificación: `npm run build` y `npm run lint` del frontend correctos (el aviso de `navigation` en `App.jsx` ya existía).
+
+## Empaquetado en Docker
+
+- `maintenance-app-frontend/.dockerignore` tenía solo `node_modules`. Se le añadieron `dist`, `.DS_Store`, `.env`, `.env*.local`, `*.log`, `*.md`, `CAMBIOS.txt` y el propio Dockerfile. `.git` no hace falta: el repositorio está en la carpeta padre, fuera del contexto de build.
+- El Dockerfile del frontend ejecutaba `RUN npm run dev`, que levanta el servidor de Vite y nunca termina: el build quedaba colgado y jamás generaba `/app/dist`. Ahora ejecuta `npm run build`. El archivo se renombró de `dockerfile` a `Dockerfile`, porque en minúscula solo lo encuentra un sistema de archivos que ignore mayúsculas (macOS sí, Linux y CI no).
+- Se creó `maintenance-app-frontend/nginx.conf`, que el Dockerfile ya esperaba copiar y no existía (la etapa 2 fallaba ahí). Sirve `dist`, proxea `/api` al servicio `backend` quitando ese prefijo —igual que el rewrite del proxy de Vite, porque el backend monta sus rutas en la raíz—, sube `client_max_body_size` a 20 MB para los PDF de mantenimientos (el valor por defecto de nginx, 1 MB, los habría cortado con un 413) y cachea los assets con hash pero no `index.html`.
+- Se creó `maintenance-app-project/Dockerfile` (la API no tenía) sobre `node:20-slim` en lugar de alpine, porque bcrypt es un módulo nativo con binarios precompilados para glibc. Corre como usuario `node` y usa `CMD ["node", "app.js"]` para que el contenedor reciba SIGTERM.
+- Se creó `maintenance-app-project/.dockerignore`. Excluye `.env` a propósito: las variables se pasan en ejecución desde compose para no hornear secretos en una capa de la imagen.
+- El `docker-compose.yml` y la construcción de las imágenes quedan a cargo del autor del proyecto.
+- Verificación: `npm run build` y `npm run lint` del frontend correctos. La configuración de nginx y los Dockerfiles no se pudieron comprobar en esta máquina porque no tiene instalados ni `docker` ni `nginx`; se revisaron contra los límites y rutas reales del código (20 MB en `documentos.service.js`, rewrite de `/api` en `vite.config.js`, `PORT` y `DB_HOST` en `src/config/env.js` y `src/config/db.js`).

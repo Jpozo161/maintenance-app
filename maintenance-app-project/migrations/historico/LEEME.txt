@@ -1,0 +1,2 @@
+Scripts antiguos que se aplicaron a mano antes de tener migraciones.
+Ya están incluidos en 001_esquema_inicial.sql; se guardan solo como referencia y el runner los ignora.

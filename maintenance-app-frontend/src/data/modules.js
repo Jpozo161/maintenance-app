@@ -1,18 +1,41 @@
 export const navigation = {
   inicio: { title: "Inicio", icon: "⌂" },
   propietarios: { title: "Usuarios", icon: "◉" },
-  pagos: { title: "Pagos", icon: "$" },
+  pagos: { title: "Pago de administración", icon: "$" },
   mantenimientos: { title: "Mantenimientos", icon: "⌁" },
   averias: { title: "Averías", icon: "⚠" },
   propiedades: {title: "Propiedades", icon: "◉" },
   areasSociales: { title: "Áreas sociales", icon: "⌂" },
-  ocr: { title: "Facturas", icon: "▤" }
+  visitas: { title: "Gestión de visitas", icon: "☖" },
+  documentos: { title: "Documentos", icon: "▤" }
 };
 
+// Vistas permitidas por rol; la primera es la de inicio. ADMIN ve todas.
+export const roleViews = {
+  SUPERVISOR: ["averias"],
+  RESIDENTE: ["areasSociales", "visitas"],
+  TECNICO: ["inicio", "mantenimientos"],
+  FRONTDESK: ["visitas"],
+};
+
+export const roleLabels = {
+  ADMIN: "Administrador",
+  SUPERVISOR: "Supervisor",
+  RESIDENTE: "Residente",
+  TECNICO: "Técnico",
+  FRONTDESK: "Recepción",
+};
+
+export const canView = (role, view) => Boolean(navigation[view])
+  && (role === "ADMIN" || (roleViews[role] ?? roleViews.SUPERVISOR).includes(view));
+
+export const homeView = (role) => role === "ADMIN" ? "inicio" : (roleViews[role] ?? roleViews.SUPERVISOR)[0];
+
 export const headers = {
-  propietarios: ["Usuario", "Residencial", "Correo", "Tipo de rol"],
-  pagos: ["Fecha", "Propietario", "Valor", "Estado"],
-  mantenimientos: ["Actividad", "Descripción", "Propiedad", "Creado el", "Fecha límite", "Estado", "Técnico", "Facturas"],
+  propietarios: ["Usuario", "Residencial", "Apartamento", "Correo", "Tipo de rol"],
+  pagos: ["Fecha", "Propietario", "Valor", "Número de factura", "Estado", "Apartamento"],
+  mantenimientos: ["N.º", "Actividad", "Descripción", "Propiedad", "Creado el", "Fecha límite", "Estado", "Técnico", "Documentos"],
+  historialMantenimientos: ["N.º", "Actividad", "Descripción", "Propiedad", "Fecha límite", "Cerrado el", "Estado", "Técnico", "Próximo mantenimiento"],
   novedades: ["Novedad", "Categoría", "Residencial", "Fecha", "Estado"],
 };
 
@@ -25,7 +48,7 @@ export const endpoints = {
   residenciales: "/residenciales",
 };
 
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+const dateFormatter = new Intl.DateTimeFormat("es-DO", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
@@ -61,6 +84,13 @@ export const asArray = (data) => {
   return [];
 };
 
+// Cada mantenimiento se identifica por su número (su id) en las tablas y en el selector
+// de documentos, porque es lo más corto de buscar cuando hay cientos de registros.
+export const maintenanceNumber = (id) => `#${id}`;
+
+export const maintenanceLabel = (item) =>
+  `${maintenanceNumber(item.id)} · ${item.tipo || item.descripcion || "Mantenimiento"}`;
+
 export const toTableRows = (type, data) => 
 
   asArray(data).map((item) => {
@@ -71,7 +101,7 @@ export const toTableRows = (type, data) =>
     case "propietarios": return {
       id: item.id,
       item,
-      cells: [item.nombre, item.res_nombre ?? "—", item.email, item.rol ?? "—"]
+      cells: [item.nombre, item.res_nombre ?? "—", item.apartamento_nombre ?? "—", item.email, item.rol ?? "—"]
     };
     
     case "pagos": return {
@@ -81,7 +111,9 @@ export const toTableRows = (type, data) =>
         formatDate(item.fecha_creacion ?? item.fecha),
         item.nombre ?? item.propietario,
         formatMoney(item.valor ?? item.monto),
-        item.estado ?? "Registrado"
+        item.numero_factura ?? "—",
+        item.estado ?? "Registrado",
+        item.apartamento_nombre ?? "—"
       ]
     };
 
@@ -89,6 +121,7 @@ export const toTableRows = (type, data) =>
       id: item.id,
       item,
       cells: [
+        maintenanceNumber(item.id),
         item.tipo ?? item.actividad,
         item.descripcion,
         item.nombre_residencial ?? "Sin propiedad asignada",
@@ -96,7 +129,23 @@ export const toTableRows = (type, data) =>
         formatDate(item.fecha_programada ?? item.fecha),
         item.estado_nombre ?? item.estado ?? item.estado_id,
         item.tecnico_nombre ?? "N/A",
-        Number(item.facturas_count) ? `${item.facturas_count} ${Number(item.facturas_count) === 1 ? "factura" : "facturas"}` : "Sin facturas"
+        Number(item.documentos_count) ? `${item.documentos_count} ${Number(item.documentos_count) === 1 ? "documento" : "documentos"}` : "Sin documentos"
+      ]
+    };
+
+    case "historialMantenimientos": return {
+      id: item.id,
+      item,
+      cells: [
+        maintenanceNumber(item.id),
+        item.tipo ?? item.actividad,
+        item.descripcion,
+        item.nombre_residencial ?? "Sin propiedad asignada",
+        formatDate(item.fecha_programada ?? item.fecha),
+        formatDate(item.fecha_cierre),
+        item.estado_nombre ?? item.estado ?? item.estado_id,
+        item.tecnico_nombre ?? "N/A",
+        item.siguiente_id ? "Programado" : "Sin programar"
       ]
     };
 
@@ -110,7 +159,7 @@ export const toTableRows = (type, data) =>
   }
 });
 
-const paymentFormatter = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+const paymentFormatter = new Intl.NumberFormat("es-DO", { maximumFractionDigits: 2 });
 export const formatMoney = (value) => {
   const amount = Number(value);
   return `$${paymentFormatter.format(Number.isFinite(amount) ? amount : 0)}`;

@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
-import { api, getResidenciales, getRoles } from "../services/api";
+import { api, getApartamentos, getResidenciales, getRoles } from "../services/api";
 
 export default function Form({ showToast, type }) {
 
   const [form, setForm] = useState({});
   const [residenciales, setresidenciales] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [apartamentos, setApartamentos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const selectedRole = roles.find((role) => String(role.id) === String(form.role));
+  // Residentes y recepción (FRONTDESK) quedan asignados a un residencial.
   const isResidentRole = type === "propietarios"
-    && String(selectedRole?.nombre ?? "").trim().toUpperCase() === "RESIDENTE";
+    && ["RESIDENTE", "FRONTDESK"].includes(String(selectedRole?.nombre ?? "").trim().toUpperCase());
+  // El apartamento se asigna a residentes y a pagos; depende del residencial elegido.
+  const usesApartamento = type === "pagos"
+    || (type === "propietarios" && String(selectedRole?.nombre ?? "").trim().toUpperCase() === "RESIDENTE");
 
 
   //___________________________UseEffect
@@ -41,10 +46,23 @@ export default function Form({ showToast, type }) {
 
 }, [type]);
 
+  useEffect(() => {
+    if (!usesApartamento || !form.residencial_id) return undefined;
+    let active = true;
+    getApartamentos(form.residencial_id)
+      .then((result) => { if (active) setApartamentos(Array.isArray(result) ? result : result?.data ?? []); })
+      .catch((error) => console.error("No se pudieron cargar los apartamentos", error));
+    return () => { active = false; };
+  }, [usesApartamento, form.residencial_id]);
+
   //_____________________________________________________
 
-  const change = event =>
-    setForm({ ...form, [event.target.name]: event.target.value });
+  // Al cambiar de residencial se limpia el apartamento, porque pertenece al residencial anterior.
+  const change = event => {
+    const { name, value } = event.target;
+    if (name === "residencial_id") setApartamentos([]);
+    setForm({ ...form, [name]: value, ...(name === "residencial_id" ? { apartamento_id: "" } : {}) });
+  };
 
   
   
@@ -53,9 +71,12 @@ export default function Form({ showToast, type }) {
     setSaving(true);
     setError("");
     try {
+      const apartamento_id = usesApartamento && form.residencial_id ? form.apartamento_id || null : null;
       const payload = type === "propietarios"
-        ? { ...form, residencial_id: isResidentRole ? form.residencial_id || null : null }
-        : form;
+        ? { ...form, residencial_id: isResidentRole ? form.residencial_id || null : null, apartamento_id }
+        : type === "pagos"
+          ? { nombre: form.nombre, monto: form.monto, fecha_creacion: form.fecha_creacion, numero_factura: form.numero_factura || null, apartamento_id }
+          : form;
       await api(payload, type);
       showToast(type === "propietarios" ? "Usuario registrado correctamente" : "Registro guardado correctamente");
     } catch (err) {
@@ -86,7 +107,9 @@ export default function Form({ showToast, type }) {
         { name: "nombre", label: "Propietario" },
         { name: "monto", label: "Monto", type: "number" },
         { name: "fecha_creacion", label: "Fecha", type: "date" },
-
+        { name: "numero_factura", label: "Número de factura (opcional)", optional: true, placeholder: "Ej.: FAC-0001" },
+        { name: "residencial", label: "Residencial" },
+        { name: "apartamento", label: "Apartamento (opcional)" },
       ]
     },
 
@@ -97,7 +120,8 @@ export default function Form({ showToast, type }) {
         { name: "nombre", label: "Nombre" },
         { name: "email", label: "Email" },
         { name: "contrasena", label: "Password" },
-        { name: "residencial", label: "Unidad" }
+        { name: "residencial", label: "Unidad" },
+        { name: "apartamento", label: "Apartamento (opcional)" }
       ]
     },
 
@@ -149,6 +173,7 @@ export default function Form({ showToast, type }) {
           <div className="dynamic-fields">
             {nameConfig.Fields
               .filter((field) => field.name !== "residencial" || type !== "propietarios" || isResidentRole)
+              .filter((field) => field.name !== "apartamento" || usesApartamento)
               .map((field) => (
               <label key={field.name} htmlFor={`field-${field.name}`}>
 
@@ -160,22 +185,33 @@ export default function Form({ showToast, type }) {
                     onChange={change} 
                     value={form.residencial_id || ""}>
 
-                    <option value="">Seleccione una unidad</option>
+                    <option value="">
+                      Seleccione una unidad
+                      </option>
                     {residenciales.map((unidad) => 
                     <option key={unidad.id} 
                     value={unidad.id}>
 
                     {unidad.nombre}</option>)}
                   </select>
+                ) : field.name === "apartamento" ? (
+                  <select id={`field-${field.name}`}
+                    name="apartamento_id"
+                    onChange={change}
+                    value={form.apartamento_id || ""}
+                    disabled={!form.residencial_id}>
+                    <option value="">{form.residencial_id ? (apartamentos.length ? "Sin apartamento" : "Este residencial no tiene apartamentos") : "Primero selecciona el residencial"}</option>
+                    {apartamentos.map((apartamento) => <option key={apartamento.id} value={apartamento.id}>{apartamento.nombre} · {apartamento.tipo}</option>)}
+                  </select>
                 ) : (
 
                   <input id={`field-${field.name}`} 
-                    required name={field.name} type={field.type || (field.name === "contrasena" ? "password" : field.name === "fecha_programada" ? "date" : "text")} 
+                    required={!field.optional} name={field.name} type={field.type || (field.name === "contrasena" ? "password" : field.name === "fecha_programada" ? "date" : "text")} 
                     min={field.name === "monto" ? "0" : undefined}
                     step={field.name === "monto" ? "1" : undefined}
                     onChange={change} 
                     value={form[field.name] || ""} 
-                    placeholder="Ej.: Fuga de agua en baño" />
+                    placeholder={field.placeholder} />
                 )}
                   </label>
               ))}

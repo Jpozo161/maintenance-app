@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { navigation } from "./data/modules";
+import { canView, homeView, navigation } from "./data/modules";
 import { getCurrentUser, logoutUser } from "./services/api";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -7,9 +7,10 @@ import MaintenanceModule from "./components/MaintenanceModule";
 import FailureReport from "./components/FailureReport";
 import AveriasModule from "./components/AveriasModule";
 import LoginPage from "./components/LoginPage";
-import OcrComparison from "./components/OcrComparison";
+import DocumentsModule from "./components/DocumentsModule";
 import PropertiesModule from "./components/PropertiesModule";
 import SocialAreasModule from "./components/SocialAreasModule";
+import VisitsModule from "./components/VisitsModule";
 
 const initialView = () => window.location.hash.slice(1) || "inicio";
 
@@ -21,13 +22,8 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   const setUserHome = useCallback((sessionUser) => {
-    const nextView = sessionUser.role === "SUPERVISOR"
-      ? "averias"
-      : sessionUser.role === "RESIDENTE"
-        ? "areasSociales"
-        : sessionUser.role === "TECNICO"
-          ? ["inicio", "mantenimientos"].includes(window.location.hash.slice(1)) ? window.location.hash.slice(1) : "inicio"
-          : navigation[window.location.hash.slice(1)] ? window.location.hash.slice(1) : "inicio";
+    const requested = window.location.hash.slice(1);
+    const nextView = canView(sessionUser.role, requested) ? requested : homeView(sessionUser.role);
     window.location.hash = nextView;
     setView(nextView);
   }, []);
@@ -46,10 +42,7 @@ export default function App() {
   }, [setUserHome]);
 
   const navigate = (nextView) => {
-    if (user?.role === "SUPERVISOR" && nextView !== "averias") return;
-    if (user?.role === "RESIDENTE" && nextView !== "areasSociales") return;
-    if (user?.role === "TECNICO" && !["inicio", "mantenimientos"].includes(nextView)) return;
-    if (!navigation[nextView]) return;
+    if (!canView(user?.role, nextView)) return;
     window.location.hash = nextView;
     setView(nextView);
     setObjects("");
@@ -80,20 +73,17 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2800);
   };
 
-  if (checkingSession) return <main className="auth-loading">Comprobando sesión…</main>;
+  if (checkingSession) 
+    return <main className="auth-loading">Comprobando sesión…</main>;
   if (!user) return <LoginPage onLogin={signIn} />;
 
-  const currentView = user.role === "SUPERVISOR" ? "averias" : user.role === "RESIDENTE" ? "areasSociales" : user.role === "TECNICO" && !["inicio", "mantenimientos"].includes(view) ? "inicio" : view;
+  const currentView = canView(user.role, view) ? view : homeView(user.role);
 
   return <div className="app-shell">
     <Sidebar view={currentView} onNavigate={navigate} user={user} onSignOut={signOut} />
     <main>
       
       <header className="topbar">
-        <div>
-          <small>ADMINISTRACIÓN DEL CONJUNTO</small>
-          <h1>{navigation[currentView]?.title ?? "Inicio"}</h1>
-        </div>
 
         {user.role === "ADMIN" && 
           <button className="bell" type="button" aria-label="Ver próximos mantenimientos" title="Ver próximos mantenimientos" onClick={() => navigate("inicio")}>
@@ -105,8 +95,10 @@ export default function App() {
         <Dashboard onNavigate={navigate} role={user.role} />
         : currentView === "areasSociales" ? 
           <SocialAreasModule user={user} />
-          : currentView === "ocr" ? 
-            <OcrComparison />
+        : currentView === "visitas" ? 
+          <VisitsModule user={user} />
+          : currentView === "documentos" ? 
+            <DocumentsModule />
           : currentView === "averias" ? 
             (user.role === "SUPERVISOR" ? 
               <AveriasModule /> : <FailureReport onToast={showToast} />

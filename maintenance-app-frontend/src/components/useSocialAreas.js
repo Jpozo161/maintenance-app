@@ -6,10 +6,11 @@ import {
   getAreaReservations,
   getAreasSociales,
   getResidenciales,
+  getResidentes,
   reviewAreaReservation,
   updateAreaSocial,
 } from "../services/api";
-import { areaColumns, emptyArea, timeValue, todayInBogota } from "./socialAreasUtils";
+import { areaColumns, bookingStateLabels, emptyArea, timeValue, todayInBogota } from "./socialAreasUtils";
 
 export default function useSocialAreas(isAdmin) {
   const [areas, setAreas] = useState([]);
@@ -26,9 +27,14 @@ export default function useSocialAreas(isAdmin) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // Solo administrador: residencial y residente a cuyo nombre queda la reserva.
+  const [bookingResidencial, setBookingResidencial] = useState("");
+  const [bookingResident, setBookingResident] = useState("");
+  const [residents, setResidents] = useState([]);
 
   const currentAvailabilityKey = selectedArea + "|" + date;
-  const activeAreas = useMemo(() => areas.filter((area) => Boolean(area.activa)), [areas]);
+  const activeAreas = useMemo(() => areas.filter((area) => Boolean(area.activa)
+    && (!isAdmin || String(area.residencial_id) === String(bookingResidencial))), [areas, isAdmin, bookingResidencial]);
   const slots = availability.key === currentAvailabilityKey ? availability.slots : [];
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => {
     const [year, month, day] = todayInBogota().split("-").map(Number);
@@ -47,7 +53,8 @@ export default function useSocialAreas(isAdmin) {
     setAreas(loadedAreas);
     setBookings(Array.isArray(bookingData) ? bookingData : []);
     setResidenciales(Array.isArray(residentialData) ? residentialData : []);
-    setSelectedArea((current) => current || String(loadedAreas.find((area) => area.activa)?.id || ""));
+    // El administrador elige primero el residencial; el área se selecciona después.
+    if (!isAdmin) setSelectedArea((current) => current || String(loadedAreas.find((area) => area.activa)?.id || ""));
   }, [isAdmin]);
 
   useEffect(() => {
@@ -139,7 +146,21 @@ export default function useSocialAreas(isAdmin) {
     } catch (err) { setError("No se pudo cambiar el estado del área: " + err.message); }
   };
 
+  const changeBookingResidencial = async (residencialId) => {
+    setBookingResidencial(residencialId);
+    setBookingResident("");
+    setResidents([]);
+    setSelectedSlot(null);
+    setSelectedArea(String(areas.find((area) => area.activa && String(area.residencial_id) === String(residencialId))?.id || ""));
+    if (!residencialId) return;
+    try {
+      const data = await getResidentes(residencialId);
+      setResidents(Array.isArray(data) ? data : []);
+    } catch (err) { setError("No se pudieron cargar los residentes: " + err.message); }
+  };
+
   const requestBooking = async (slot) => {
+    if (isAdmin && !bookingResident) { setError("Selecciona el residente para el que haces la reserva."); return; }
     setSaving(true); setError(""); setNotice("");
     try {
       await createAreaReservation({
@@ -147,9 +168,12 @@ export default function useSocialAreas(isAdmin) {
         fecha: date,
         hora_inicio: slot.hora_inicio,
         hora_fin: slot.hora_fin,
+        ...(isAdmin ? { usuario_id: Number(bookingResident) } : {}),
       });
       setSelectedSlot(null);
-      setNotice("Solicitud enviada. Quedará pendiente hasta que el administrador la revise.");
+      setNotice(isAdmin
+        ? "Reserva registrada y aprobada a nombre del residente."
+        : "Solicitud enviada. Quedará pendiente hasta que el administrador la revise.");
       await refresh();
       const result = await getAreaAvailability(selectedArea, date);
       setAvailability({ key: currentAvailabilityKey, slots: Array.isArray(result.slots) ? result.slots : [] });
@@ -180,7 +204,7 @@ export default function useSocialAreas(isAdmin) {
   const bookingRows = bookings.map((booking) => ({
     id: booking.id,
     item: booking,
-    cells: [booking.fecha, `${timeValue(booking.hora_inicio)}–${timeValue(booking.hora_fin)}`, booking.area_nombre || "—", isAdmin ? booking.usuario_nombre || "—" : booking.residencial_nombre || "Mi residencial", booking.estado],
+    cells: [booking.fecha, `${timeValue(booking.hora_inicio)}–${timeValue(booking.hora_fin)}`, booking.area_nombre || "—", isAdmin ? booking.usuario_nombre || "—" : booking.residencial_nombre || "Mi residencial", bookingStateLabels[booking.estado] ?? booking.estado],
   }));
 
   return {
@@ -190,5 +214,6 @@ export default function useSocialAreas(isAdmin) {
     areaForm, setAreaForm, editingId, setEditingId, loading, saving, error, notice,
     setError, setNotice, areaColumns, areaRows, bookingRows, saveArea, editArea, toggleArea,
     requestBooking, submitSelectedBooking, reviewBooking,
+    bookingResidencial, changeBookingResidencial, bookingResident, setBookingResident, residents,
   };
 }
