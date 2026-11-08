@@ -6,7 +6,7 @@ const mysql = require("mysql2/promise");
 // Asi la misma imagen sirve en los dos sitios sin renombrar variables.
 const dbConfig = {
     host: process.env.DB_HOST || process.env.host || "localhost",
-    port: Number(process.env.DB_PORT || process.env.port) || 3306,
+    port: Number(process.env.DB_PORT || process.env.port) || 17026,
     user: process.env.DB_USER || process.env.user || "root",
     password: process.env.DB_PASSWORD || process.env.password,
     database: process.env.DB_NAME || process.env.database || "mantenimiento"
