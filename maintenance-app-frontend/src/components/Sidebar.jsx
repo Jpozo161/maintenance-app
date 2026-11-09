@@ -6,7 +6,7 @@ export default function Sidebar({ view, onNavigate, user, onSignOut }) {
 
   return <aside className="sidebar">
     <div className="brand">
-      <span>▣</span>
+      <span className="brand-logo"><img src="/logo.png" alt="Logo del conjunto residencial" /></span>
       <div>
         <strong>
           Conjunto

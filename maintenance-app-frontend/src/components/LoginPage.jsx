@@ -12,7 +12,10 @@ export default function LoginPage({ onLogin }) {
     setBusy(true);
     setError("");
     try {
-      const session = await loginUser({ email: email.trim(), password });
+      const session = await loginUser({ 
+        email: email.trim(), 
+        password 
+      });
       onLogin(session.user);
     } catch (err) {
       setError(err.message || "No se pudo iniciar sesión.");
@@ -23,8 +26,11 @@ export default function LoginPage({ onLogin }) {
 
   return <main className="login-screen">
     <section className="login-card">
-      <div className="login-brand-mark">▣</div>
-      <p className="login-eyebrow">CONJUNTO RESIDENCIAL</p>
+      <img className="login-brand-mark" src="/logo.png" alt="Logo del conjunto residencial" />
+      <p className="login-eyebrow">
+        CONJUNTO RESIDENCIAL
+      </p>
+
       <h1>Iniciar sesión</h1>
       <p className="login-description">Ingresa con tu cuenta de administrador, supervisor o residente.</p>
       <form onSubmit={submit}>

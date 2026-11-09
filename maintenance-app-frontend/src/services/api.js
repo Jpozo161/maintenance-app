@@ -1,4 +1,5 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 
 async function requestResource(path, options = {}, timeoutMs = 12000) {
   

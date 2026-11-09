@@ -53,6 +53,26 @@ body {
   color: #59ccad;
 }
 
+.brand-logo {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border-radius: 10px;
+  padding: 5px;
+  box-sizing: border-box;
+}
+
+.brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 .brand strong,
 .brand small,
 .sidebar-footer strong,
@@ -874,14 +894,11 @@ th:last-child {
   box-shadow: 0 22px 65px #17314b16;
 }
 .login-brand-mark {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: #e5f5f1;
-  color: #137461;
-  font-size: 27px;
+  display: block;
+  width: auto;
+  height: 56px;
+  max-width: 180px;
+  object-fit: contain;
 }
 .login-eyebrow { margin: 24px 0 7px; color: #748398; font-size: 11px; font-weight: 700; letter-spacing: 1.2px; }
 .login-card h1 { margin: 0; color: #1d2939; font-size: 27px; }
