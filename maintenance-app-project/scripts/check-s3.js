@@ -22,15 +22,18 @@ const step = async (label, fn) => {
 
 const main = async () => {
     const missing = REQUIRED.filter((name) => !process.env[name]);
-    if (missing.length) throw new Error(`Faltan variables en el .env: ${missing.join(", ")}`);
+    if (missing.length) 
+        throw new Error(`Faltan variables en el .env: ${missing.join(", ")}`);
     console.log(`Bucket: ${process.env.S3_BUCKET} (${process.env.AWS_REGION})`);
 
     await step("Subiendo archivo de prueba (PutObject)", () => s3Storage.putObject(TEST_KEY, TEST_BODY, "text/plain"));
     try {
         await step("Leyéndolo con enlace firmado (GetObject)", async () => {
             const response = await fetch(s3Storage.getSignedUrl(TEST_KEY, 60));
-            if (!response.ok) throw new Error(`S3 respondió ${response.status}: ${(await response.text()).slice(0, 300)}`);
-            if (!Buffer.from(await response.arrayBuffer()).equals(TEST_BODY)) throw new Error("El contenido leído no coincide.");
+            if (!response.ok) 
+                throw new Error(`S3 respondió ${response.status}: ${(await response.text()).slice(0, 300)}`);
+            if (!Buffer.from(await response.arrayBuffer()).equals(TEST_BODY)) 
+                throw new Error("El contenido leído no coincide.");
         });
     } finally {
         await step("Borrando archivo de prueba (DeleteObject)", () => s3Storage.deleteObject(TEST_KEY));

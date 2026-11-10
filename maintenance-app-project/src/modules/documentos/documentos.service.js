@@ -15,20 +15,27 @@ const requireS3 = () => {
 // El frontend envía el PDF crudo en el body y el nombre/tipo en cabeceras X-File-*.
 const readUploadedFile = (req) => {
     const buffer = req.body;
-    if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new HttpError(400, "Adjunta un archivo PDF.");
-    if (buffer.length > MAX_BYTES) throw new HttpError(413, "El archivo supera el límite de 20 MB.");
+
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) 
+        throw new HttpError(400, "Adjunta un archivo PDF.");
+    if (buffer.length > MAX_BYTES) 
+        throw new HttpError(413, "El archivo supera el límite de 20 MB.");
 
     let filename;
+
     try {
         filename = decodeURIComponent(req.get("X-File-Name") || "");
     } catch {
         filename = "";
     }
-    if (!filename || filename.length > 255) throw new HttpError(400, "El nombre del archivo no es válido.");
+    if (!filename || filename.length > 255) 
+        throw new HttpError(400, "El nombre del archivo no es válido.");
 
     // Se valida la extensión, el tipo declarado y el contenido real (los PDF empiezan por "%PDF-").
     const isPdfName = filename.toLowerCase().endsWith(".pdf");
+
     const contentType = req.get("X-File-Type") || PDF_MIME;
+    
     if (!isPdfName || contentType !== PDF_MIME || !buffer.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE))
         throw new HttpError(400, "Solo se permiten archivos PDF.");
 
@@ -70,7 +77,8 @@ const save = async (file, mantenimientoId, userId) => {
             await s3Storage.deleteObject(file.objectKey).catch((cleanupError) =>
                 console.error("No se pudo eliminar el objeto S3 después de fallar la base de datos:", cleanupError.message));
         }
-        if (error.code === "ER_DUP_ENTRY") throw new HttpError(409, "Este documento ya está asociado a ese mantenimiento.");
+        if (error.code === "ER_DUP_ENTRY") 
+            throw new HttpError(409, "Este documento ya está asociado a ese mantenimiento.");
         throw error;
     }
 };
@@ -85,7 +93,8 @@ const contentDisposition = (type, filename) => {
 const signedUrl = async (id, type) => {
     requireS3();
     const document = await repository.findById(id);
-    if (!document) throw new HttpError(404, "No se encontró el documento.");
+    if (!document) 
+        throw new HttpError(404, "No se encontró el documento.");
     return s3Storage.getSignedUrl(document.s3_object_key, 300, {
         contentType: document.tipo_mime,
         contentDisposition: contentDisposition(type, document.nombre_original)

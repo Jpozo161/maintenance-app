@@ -19,7 +19,7 @@ module.exports = {
     // Notificaciones por correo (API Gateway -> Lambda -> SES).
     // Sin url no se envia nada y la app sigue funcionando con normalidad.
     notifications: {
-        url: process.env.NOTIFICATIONS_API_URL || "",
+        url: process.env.APIGATEWAY_URL|| "",
         apiKey: process.env.NOTIFICATIONS_API_KEY || "",
         recipient: process.env.NOTIFICATIONS_RECIPIENT || "",
         timeoutMs: Number(process.env.NOTIFICATIONS_TIMEOUT_MS) || 5000

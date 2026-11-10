@@ -1,9 +1,6 @@
 // Envia notificaciones por correo a traves de API Gateway -> Lambda -> SES.
 // La URL, la clave y el destinatario viven en .env (ver .env.example).
-const { 
-    notifications 
-
-} = require("../config/env");
+const { notifications } = require("../config/env");
 
 const emailNewUser = async (notification) => {
 
@@ -15,11 +12,12 @@ const emailNewUser = async (notification) => {
     const body = {
         ...notification,
         // El Lambda exige destinatario; si la llamada no lo trae, se usa el de .env.
-        recipient: notification?.recipient || notifications.recipient
+        recipient: notification?.recipient || process.env.NOTIFICATIONS_RECIPIENT
     };
 
     try {
-        const response = await fetch(notifications.url, {
+        const response = await fetch(notifications.url
+, {
             method: "POST",
             headers: {
                 "content-type": "application/json",

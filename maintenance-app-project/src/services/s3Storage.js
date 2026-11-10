@@ -11,21 +11,28 @@ const config = () => ({
 
 const isConfigured = () => {
     const values = config();
-    return Boolean(values.bucket && values.region && values.accessKeyId && values.secretAccessKey);
+    return Boolean(values.bucket 
+        && values.region 
+        && values.accessKeyId 
+        && values.secretAccessKey
+    );
 };
 
 const encodePath = (value) => value.split("/").map((part) => 
     encodeURIComponent(part).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)).join("/");
+
 const encodeQuery = (value) => encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 const hmac = (key, value, encoding) => crypto.createHmac("sha256", key).update(value).digest(encoding);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const timestamp = () => new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
 
 const targetFor = (key) => {
+
     const values = config();
     if (values.endpoint) {
         const endpoint = new URL(values.endpoint);
         const basePath = endpoint.pathname.replace(/\/$/, "");
+        
         return { 
             url: new URL(`${basePath}/${encodePath(values.bucket)}/${encodePath(key)}`, endpoint.origin), host: endpoint.host };
     }
@@ -88,9 +95,14 @@ const getSignedUrl = (key, expiresSeconds = 300, { contentType, contentDispositi
         "X-Amz-Expires": String(expiresSeconds),
         "X-Amz-SignedHeaders": "host"
     };
-    if (values.sessionToken) params["X-Amz-Security-Token"] = values.sessionToken;
-    if (contentType) params["response-content-type"] = contentType;
-    if (contentDisposition) params["response-content-disposition"] = contentDisposition;
+    if (values.sessionToken) 
+        params["X-Amz-Security-Token"] = values.sessionToken;
+    if (contentType) 
+        params["response-content-type"] = contentType;
+
+    if (contentDisposition) 
+        params["response-content-disposition"] = contentDisposition;
+
     const canonicalQuery = Object.keys(params).sort().map((name) => `${encodeQuery(name)}=${encodeQuery(params[name])}`).join("&");
     const canonicalRequest = ["GET", url.pathname, canonicalQuery, `host:${host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
     const stringToSign = ["AWS4-HMAC-SHA256", dateTime, scope, sha256(canonicalRequest)].join("\n");
